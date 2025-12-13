@@ -1724,6 +1724,30 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
 
                                         <DropdownMenuSeparator className="bg-white/10 my-1" />
 
+                                        <DropdownMenuLabel className="text-xs text-gray-500 uppercase tracking-wider px-2 py-1.5">
+                                          Valor fixo (teste)
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuItem
+                                          className="text-sm cursor-pointer hover:bg-zinc-800 focus:bg-zinc-800 px-2 py-1.5 rounded-sm flex items-center gap-2 outline-none"
+                                          onClick={() => {
+                                            const k = String(m.key || '').toLowerCase();
+                                            const suggested = k.includes('email')
+                                              ? 'teste@exemplo.com'
+                                              : k.includes('empresa')
+                                                ? 'Empresa Teste'
+                                                : '';
+                                            const raw = window.prompt('Digite um valor fixo para esta variável:', suggested);
+                                            const v = (raw ?? '').trim();
+                                            if (!v) return;
+                                            applyQuickFill({ where: m.where, key: m.key, buttonIndex: m.buttonIndex }, v);
+                                          }}
+                                        >
+                                          <div className="text-gray-300 font-mono text-[10px] w-3.5 text-center">T</div>
+                                          <span>Texto…</span>
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuSeparator className="bg-white/10 my-1" />
+
                                         {customFields.length > 0 && (
                                           <>
                                             <DropdownMenuLabel className="text-xs text-gray-500 uppercase tracking-wider px-2 py-1.5 mt-2">

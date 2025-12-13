@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, X } from 'lucide-react';
+import { AlertTriangle, Loader2, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { Contact, CustomFieldDefinition } from '@/types';
@@ -220,7 +220,9 @@ export const ContactQuickEditModal: React.FC<ContactQuickEditModalProps> = ({
 
   if (!isOpen) return null;
 
-  const isLoading = contactQuery.isLoading || !contactQuery.data;
+  const isLoading = contactQuery.isLoading;
+  const isError = contactQuery.isError;
+  const errorMessage = (contactQuery.error as any)?.message as string | undefined;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-60 flex items-center justify-center p-4">
@@ -239,10 +241,46 @@ export const ContactQuickEditModal: React.FC<ContactQuickEditModalProps> = ({
           </button>
         </div>
 
-        {isLoading ? (
+        {!contactId ? (
+          <div className="flex flex-col items-center justify-center py-10 text-gray-400 text-center">
+            <AlertTriangle className="w-5 h-5 text-amber-400 mb-2" />
+            <p className="text-sm text-gray-200 font-medium">Contato inválido</p>
+            <p className="text-xs text-gray-500 mt-1">Não foi possível abrir este contato. Feche e tente novamente.</p>
+            <div className="mt-4">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg bg-zinc-800 border border-white/10 text-white hover:bg-zinc-700 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        ) : isLoading ? (
           <div className="flex items-center justify-center py-10 text-gray-400">
             <Loader2 className="w-5 h-5 animate-spin mr-2" />
             Carregando contato...
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center py-10 text-gray-400 text-center">
+            <AlertTriangle className="w-5 h-5 text-amber-400 mb-2" />
+            <p className="text-sm text-gray-200 font-medium">Não foi possível carregar o contato</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {errorMessage || 'O contato pode ter sido removido ou você não tem permissão para acessá-lo.'}
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                onClick={() => contactQuery.refetch()}
+                className="px-4 py-2 rounded-lg bg-white/10 border border-white/10 text-white hover:bg-white/15 transition-colors inline-flex items-center gap-2"
+              >
+                <RefreshCw size={14} /> Tentar novamente
+              </button>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg bg-zinc-800 border border-white/10 text-white hover:bg-zinc-700 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">

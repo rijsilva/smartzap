@@ -46,24 +46,15 @@ export async function proxy(request: NextRequest) {
     }
 
     // If configured but setup not complete (company info missing), go to wizard.
-    // IMPORTANT: do not block /login (it must remain reachable in dev/local, where
-    // setup completeness is detected via DB, not env). Also, if a session cookie exists,
-    // assume setup was completed and let the user proceed.
-    if (hasMasterPassword && !isSetupComplete) {
-        const hasSession = !!sessionCookie?.value
-
-        if (!hasSession) {
-            if (
-                !pathname.startsWith('/setup') &&
-                !pathname.startsWith('/api') &&
-                !pathname.startsWith('/debug') &&
-                !pathname.startsWith('/login')
-            ) {
-                const wizardUrl = new URL('/setup/wizard?resume=true', request.url)
-                return NextResponse.redirect(wizardUrl)
-            }
-        }
-    }
+    // IMPORTANT:
+    // - Não force o wizard aqui. Em dev/local, a completude do setup pode ser detectada via DB,
+    //   enquanto SETUP_COMPLETE é uma env que pode não refletir o estado real.
+    // - Para ser mais “à prova de falhas”, sempre deixe o usuário cair em /login quando não houver
+    //   sessão, e deixe o /login decidir (via /api/auth/status) se precisa mandar para o wizard.
+    // - Se existir session cookie, deixa passar.
+    //
+    // Obs: o redirect para /login já é feito mais abaixo para páginas protegidas; então aqui só
+    // evitamos empurrar o usuário para /setup/wizard?resume=true baseado apenas em env.
 
     // If configured and on OLD bootstrap setup, redirect to login or new start?
     // Actually, if configured, we might want to allow /setup/start if user WANTS to fix envs.

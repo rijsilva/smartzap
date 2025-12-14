@@ -12,15 +12,40 @@ export default function SetupPage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Check if we have Vercel token in storage 
-    const hasToken = localStorage.getItem('setup_token')
+    let cancelled = false
 
-    if (hasToken) {
-      // Continue with wizard
-      router.push('/setup/wizard')
-    } else {
-      // Must enter token to potentially fix/finish setup
-      router.push('/setup/start')
+    const run = async () => {
+      try {
+        // Se o setup já está concluído, não faz sentido empurrar o usuário pro wizard.
+        // Isso acontece bastante após limpar cookies/localStorage.
+        const res = await fetch('/api/auth/status', { cache: 'no-store' })
+        const data = await res.json().catch(() => null)
+        if (cancelled) return
+
+        if (res.ok && data?.isConfigured && data?.isSetup) {
+          router.push('/login')
+          return
+        }
+      } catch {
+        // Ignora e segue o fluxo local abaixo
+      }
+
+      // Check if we have Vercel token in storage
+      const hasToken = localStorage.getItem('setup_token')
+
+      if (hasToken) {
+        // Continue with wizard
+        router.push('/setup/wizard')
+      } else {
+        // Must enter token to potentially fix/finish setup
+        router.push('/setup/start')
+      }
+    }
+
+    run()
+
+    return () => {
+      cancelled = true
     }
   }, [router])
 

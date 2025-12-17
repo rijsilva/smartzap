@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { fetchWithTimeout, safeJson, safeText, isAbortError } from '@/lib/server-http'
 
 export async function POST(request: NextRequest) {
   try {
@@ -126,7 +127,7 @@ async function validateSupabase(credentials: Record<string, string>) {
 
     let last: { status: number; body?: string } | null = null
     for (const endpoint of endpoints) {
-      const response = await fetch(endpoint, { headers })
+      const response = await fetchWithTimeout(endpoint, { headers, timeoutMs: 8000 })
       if (response.ok) {
         return { ok: true, status: response.status }
       }
@@ -134,7 +135,7 @@ async function validateSupabase(credentials: Record<string, string>) {
       // Try to capture a tiny body snippet in dev for diagnosis (never include keys)
       let body: string | undefined
       if (process.env.NODE_ENV !== 'production') {
-        body = await response.text().catch(() => undefined)
+        body = (await safeText(response)) || undefined
         if (body && body.length > 400) body = body.slice(0, 400)
       }
       last = { status, body }
@@ -244,14 +245,15 @@ async function validateQStash(credentials: Record<string, string>) {
 
   try {
     // Test QStash by fetching signing keys (confirms token is valid and can retrieve keys)
-    const response = await fetch('https://qstash.upstash.io/v2/keys', {
+    const response = await fetchWithTimeout('https://qstash.upstash.io/v2/keys', {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
+      timeoutMs: 8000,
     })
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Erro desconhecido')
+      const errorText = (await safeText(response)) || 'Erro desconhecido'
       return NextResponse.json({
         valid: false,
         error: response.status === 401 ? 'Token do QStash inválido. Verifique o QSTASH_TOKEN (não é o Current Signing Key).' : `Erro QStash: ${errorText}`
@@ -259,7 +261,7 @@ async function validateQStash(credentials: Record<string, string>) {
     }
 
     // Optional: could return keys here to verify they match if frontend had them
-    const keys = await response.json()
+    const keys = (await safeJson<any>(response)) || {}
     if (!keys.current || !keys.next) {
       return NextResponse.json({
         valid: false,
@@ -291,24 +293,25 @@ async function validateWhatsApp(credentials: Record<string, string>) {
 
   try {
     // Test WhatsApp by getting phone number info
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://graph.facebook.com/v21.0/${phoneId}`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
+        timeoutMs: 8000,
       }
     )
 
     if (!response.ok) {
-      const error = await response.json()
+      const error = await safeJson<any>(response)
       return NextResponse.json({
         valid: false,
-        error: error.error?.message || 'Token ou Phone ID inválido'
+        error: error?.error?.message || 'Token ou Phone ID inválido'
       })
     }
 
-    const data = await response.json()
+    const data = await safeJson<any>(response)
 
     return NextResponse.json({
       valid: true,
@@ -318,7 +321,7 @@ async function validateWhatsApp(credentials: Record<string, string>) {
     console.error('WhatsApp validation error:', error)
     return NextResponse.json({
       valid: false,
-      error: 'Não foi possível conectar ao WhatsApp'
+      error: isAbortError(error) ? 'Timeout ao conectar ao WhatsApp' : 'Não foi possível conectar ao WhatsApp'
     })
   }
 }

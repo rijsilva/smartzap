@@ -6,6 +6,7 @@ export const revalidate = 0
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { buildFlowMessage } from '@/lib/whatsapp/flows'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 export async function POST(request: Request) {
   try {
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
       flowMessageVersion: body?.flowMessageVersion ? String(body.flowMessageVersion) : '3',
     })
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}/messages`,
       {
         method: 'POST',
@@ -53,10 +54,11 @@ export async function POST(request: Request) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+        timeoutMs: 8000,
       }
     )
 
-    const data = await response.json().catch(() => null)
+    const data = await safeJson<any>(response)
 
     if (!response.ok) {
       return NextResponse.json(

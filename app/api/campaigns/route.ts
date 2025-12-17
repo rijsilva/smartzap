@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { campaignDb, campaignContactDb } from '@/lib/supabase-db'
 import { CreateCampaignSchema, validateBody, formatZodErrors } from '@/lib/api-validation'
 import { Client as QStashClient } from '@upstash/qstash'
+import { fetchWithTimeout, safeText } from '@/lib/server-http'
 
 // Force dynamic - NO caching at all
 export const dynamic = 'force-dynamic'
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
                 campaignId: campaign.id,
                 scheduledAt: scheduledAtIso,
               })
-              const resp = await fetch(`${baseUrl}/api/campaign/dispatch`, {
+              const resp = await fetchWithTimeout(`${baseUrl}/api/campaign/dispatch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -138,10 +139,11 @@ export async function POST(request: Request) {
                   trigger: 'schedule',
                   scheduledAt: scheduledAtIso,
                 }),
+                timeoutMs: 30000,
               })
 
               if (!resp.ok) {
-                const text = await resp.text().catch(() => '')
+                const text = (await safeText(resp)) || ''
                 console.warn('[Campaigns][LocalScheduler] dispatch failed:', resp.status, text)
               }
             } catch (e) {

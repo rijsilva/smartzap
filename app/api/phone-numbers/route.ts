@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function POST(request: NextRequest) {
   let businessAccountId: string | undefined
@@ -31,20 +35,20 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://graph.facebook.com/v24.0/${businessAccountId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,webhook_configuration`,
-      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+      { headers: { 'Authorization': `Bearer ${accessToken}` }, timeoutMs: 8000 }
     )
 
     if (!response.ok) {
-      const error = await response.json()
+      const error = await safeJson<any>(response)
       return NextResponse.json(
-        { error: error.error?.message || 'Failed to fetch phone numbers' }, 
+        { error: error?.error?.message || 'Falha ao buscar números de telefone' }, 
         { status: response.status }
       )
     }
 
-    const data = await response.json()
+    const data = await safeJson<any>(response)
     return NextResponse.json(data.data || [])
   } catch (error) {
     console.error('Error fetching phone numbers:', error)
@@ -64,20 +68,20 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://graph.facebook.com/v24.0/${credentials.businessAccountId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,webhook_configuration`,
-      { headers: { 'Authorization': `Bearer ${credentials.accessToken}` } }
+      { headers: { 'Authorization': `Bearer ${credentials.accessToken}` }, timeoutMs: 8000 }
     )
 
     if (!response.ok) {
-      const error = await response.json()
+      const error = await safeJson<any>(response)
       return NextResponse.json(
-        { error: error.error?.message || 'Failed to fetch phone numbers' }, 
+        { error: error?.error?.message || 'Falha ao buscar números de telefone' }, 
         { status: response.status }
       )
     }
 
-    const data = await response.json()
+    const data = await safeJson<any>(response)
     return NextResponse.json(data.data || [])
   } catch (error) {
     console.error('Error fetching phone numbers:', error)

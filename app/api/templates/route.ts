@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { templateDb } from '@/lib/supabase-db'
 import { createHash } from 'crypto'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 interface MetaTemplateComponent {
   type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS'
@@ -25,22 +29,32 @@ async function fetchTemplatesFromMeta(businessAccountId: string, accessToken: st
   const allTemplates: MetaTemplate[] = []
   let nextUrl: string | null = `https://graph.facebook.com/v24.0/${businessAccountId}/message_templates?fields=name,status,language,category,parameter_format,components,last_updated_time&limit=100`
 
+  // Guardrail: evita loop infinito caso a paginação da Meta esteja quebrada.
+  let pages = 0
+  const maxPages = 25
+
   // Paginate through all results
   while (nextUrl) {
-    const res: Response = await fetch(nextUrl, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
+    pages++
+    if (pages > maxPages) {
+      throw new Error(`Limite de paginação atingido ao buscar templates (>${maxPages} páginas).`) 
+    }
+
+    const res: Response = await fetchWithTimeout(nextUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      timeoutMs: 12000,
     })
 
     if (!res.ok) {
-      const error = await res.json()
-      throw new Error(error.error?.message || 'Failed to fetch templates')
+      const error = await safeJson<any>(res)
+      throw new Error(error?.error?.message || 'Falha ao buscar templates na Meta')
     }
 
-    const data = await res.json()
-    allTemplates.push(...(data.data || []))
+    const data = await safeJson<any>(res)
+    allTemplates.push(...(data?.data || []))
 
     // Check for next page
-    nextUrl = data.paging?.next || null
+    nextUrl = data?.paging?.next || null
   }
 
   // Transform Meta format to our App format

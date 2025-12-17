@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { templateProjectDb } from '@/lib/supabase-db'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,7 @@ export async function POST(
 
         const credentials = await getWhatsAppCredentials()
         if (!credentials) {
-            return NextResponse.json({ error: 'WhatsApp credentials not found' }, { status: 500 })
+            return NextResponse.json({ error: 'WhatsApp credentials not found' }, { status: 400 })
         }
 
         const results = []
@@ -29,24 +30,24 @@ export async function POST(
 
                 // Strategy 1: Sync by ID
                 if (item.meta_id) {
-                    const response = await fetch(
+                    const response = await fetchWithTimeout(
                         `https://graph.facebook.com/v24.0/${item.meta_id}?fields=status,name,id`,
-                        { headers: { 'Authorization': `Bearer ${credentials.accessToken}` } }
+                        { headers: { 'Authorization': `Bearer ${credentials.accessToken}` }, timeoutMs: 12000 }
                     )
                     if (response.ok) {
-                        metaData = await response.json()
+                        metaData = await safeJson<any>(response)
                     }
                 }
 
                 // Strategy 2: Sync by Name (Recovery) if ID failed or missing
                 if (!metaData && item.name) {
-                    const response = await fetch(
-                        `https://graph.facebook.com/v24.0/${credentials.businessAccountId}/message_templates?name=${item.name}&fields=status,name,id`,
-                        { headers: { 'Authorization': `Bearer ${credentials.accessToken}` } }
+                    const response = await fetchWithTimeout(
+                        `https://graph.facebook.com/v24.0/${credentials.businessAccountId}/message_templates?name=${encodeURIComponent(item.name)}&fields=status,name,id`,
+                        { headers: { 'Authorization': `Bearer ${credentials.accessToken}` }, timeoutMs: 12000 }
                     )
 
                     if (response.ok) {
-                        const data = await response.json()
+                        const data = await safeJson<any>(response)
                         if (data.data && data.data.length > 0) {
                             // Find exact match (just to be safe)
                             metaData = data.data.find((t: any) => t.name === item.name) || data.data[0]

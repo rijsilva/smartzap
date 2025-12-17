@@ -6,6 +6,7 @@ import { templateDb, campaignDb } from '@/lib/supabase-db'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -440,14 +441,15 @@ export async function POST(_request: Request, { params }: Params) {
     }
 
     if (isLocalhost) {
-      const response = await fetch(`${baseUrl}/api/campaign/workflow`, {
+      const response = await fetchWithTimeout(`${baseUrl}/api/campaign/workflow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(workflowPayload),
+        timeoutMs: 30000,
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+        const errorData = (await safeJson<any>(response)) || {}
         throw new Error(errorData.error || `Workflow failed with status ${response.status}`)
       }
     } else {

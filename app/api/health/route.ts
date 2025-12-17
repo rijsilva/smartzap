@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getWhatsAppCredentials, getCredentialsSource } from '@/lib/whatsapp-credentials'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 // Build Vercel dashboard URL dynamically from environment
 function getVercelDashboardUrl(): string | null {
@@ -128,24 +129,25 @@ export async function GET() {
     if (credentials) {
       // Test connection to Meta API
       const testUrl = `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}?fields=display_phone_number`
-      const response = await fetch(testUrl, {
+      const response = await fetchWithTimeout(testUrl, {
         headers: { 'Authorization': `Bearer ${credentials.accessToken}` },
+        timeoutMs: 8000,
       })
 
       if (response.ok) {
-        const data = await response.json()
+        const data = await safeJson<any>(response)
         result.services.whatsapp = {
           status: 'ok',
           source,
-          phoneNumber: data.display_phone_number,
-          message: `Connected: ${data.display_phone_number}`,
+          phoneNumber: data?.display_phone_number,
+          message: data?.display_phone_number ? `Connected: ${data.display_phone_number}` : 'Connected',
         }
       } else {
-        const error = await response.json()
+        const error = await safeJson<any>(response)
         result.services.whatsapp = {
           status: 'error',
           source,
-          message: error.error?.message || 'Token invalid or expired',
+          message: error?.error?.message || 'Token invalid or expired',
         }
         result.overall = 'degraded'
       }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -65,7 +66,7 @@ export async function POST() {
 		}
 
 		const url = `${META_API_BASE}/${encodeURIComponent(badObjectId)}/messages`
-		const res = await fetch(url, {
+		const res = await fetchWithTimeout(url, {
 			method: 'POST',
 			headers: {
 				Authorization: `Bearer ${creds.accessToken}`,
@@ -73,9 +74,10 @@ export async function POST() {
 			},
 			// corpo irrelevante: queremos falhar antes de qualquer validação de payload
 			body: JSON.stringify({}),
+			timeoutMs: 8000,
 		})
 
-		const json = await res.json().catch(() => null)
+		const json = await safeJson<any>(res)
 		const normalized = normalizeErrorPayload(json)
 
 		return NextResponse.json({
@@ -98,7 +100,7 @@ export async function POST() {
 				error: 'Falha ao simular erro 100/33 (servidor).',
 				details: { message: e instanceof Error ? e.message : String(e) },
 			},
-			{ status: 500 }
+			{ status: isAbortError(e) ? 504 : 502 }
 		)
 	}
 }

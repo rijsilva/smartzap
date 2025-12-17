@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 const META_API_VERSION = 'v21.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
@@ -190,7 +191,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Call Meta API to set webhook override on phone number
     // Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/override
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${META_API_BASE}/${phoneNumberId}`,
       {
         method: 'POST',
@@ -204,16 +205,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
             verify_token: verifyToken,
           },
         }),
+        timeoutMs: 10000,
       }
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await safeJson<any>(response)
       console.error('Meta API error setting webhook override:', errorData);
       return NextResponse.json(
         {
-          error: errorData.error?.message || 'Erro ao configurar webhook override',
-          details: errorData.error,
+          error: errorData?.error?.message || 'Erro ao configurar webhook override',
+          details: errorData?.error,
           preflight: {
             attempted: preflight && !force,
             forced: force,
@@ -223,7 +225,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const data = await response.json();
+    const data = await safeJson<any>(response)
     return NextResponse.json({
       success: true,
       message: 'Webhook override configurado com sucesso',
@@ -281,7 +283,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     // Call Meta API to remove webhook override (set empty string)
     // Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/override
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${META_API_BASE}/${phoneNumberId}`,
       {
         method: 'POST',
@@ -294,22 +296,23 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
             override_callback_uri: '',
           },
         }),
+        timeoutMs: 10000,
       }
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await safeJson<any>(response)
       console.error('Meta API error removing webhook override:', errorData);
       return NextResponse.json(
         {
-          error: errorData.error?.message || 'Erro ao remover webhook override',
-          details: errorData.error
+          error: errorData?.error?.message || 'Erro ao remover webhook override',
+          details: errorData?.error
         },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
+    const data = await safeJson<any>(response)
     return NextResponse.json({
       success: true,
       message: 'Webhook override removido com sucesso',

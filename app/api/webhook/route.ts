@@ -178,7 +178,10 @@ export async function GET(request: NextRequest) {
 // Webhook Event Receiver
 // Supabase: fonte da verdade para status de mensagens
 export async function POST(request: NextRequest) {
-  const body = await request.json()
+  const body = await request.json().catch(() => null)
+  if (!body) {
+    return NextResponse.json({ status: 'ignored', error: 'Body inválido' }, { status: 400 })
+  }
 
   if (body.object !== 'whatsapp_business_account') {
     return NextResponse.json({ status: 'ignored' })

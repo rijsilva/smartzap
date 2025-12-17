@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { normalizeSubscribedFields, type MetaSubscribedApp } from '@/lib/meta-webhook-subscription'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 const META_API_VERSION = 'v24.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
@@ -9,16 +10,17 @@ async function getMetaSubscriptionStatus(params: { wabaId: string; accessToken: 
   const { wabaId, accessToken } = params
 
   const url = `${META_API_BASE}/${wabaId}/subscribed_apps?fields=id,name,subscribed_fields`
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
     cache: 'no-store',
+    timeoutMs: 12000,
   })
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null)
+    const errorData = await safeJson<any>(response)
     return {
       ok: false as const,
       status: response.status,
@@ -27,7 +29,7 @@ async function getMetaSubscriptionStatus(params: { wabaId: string; accessToken: 
     }
   }
 
-  const data = (await response.json()) as { data?: MetaSubscribedApp[] }
+  const data = (await safeJson<{ data?: MetaSubscribedApp[] }>(response)) || {}
   const apps = data?.data || []
   const subscribedFields = normalizeSubscribedFields(apps)
 
@@ -110,7 +112,7 @@ export async function POST(request: Request) {
   const form = new URLSearchParams()
   form.set('subscribed_fields', fields.join(','))
 
-  const response = await fetch(`${META_API_BASE}/${credentials.businessAccountId}/subscribed_apps`, {
+  const response = await fetchWithTimeout(`${META_API_BASE}/${credentials.businessAccountId}/subscribed_apps`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${credentials.accessToken}`,
@@ -118,10 +120,11 @@ export async function POST(request: Request) {
     },
     body: form.toString(),
     cache: 'no-store',
+    timeoutMs: 12000,
   })
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null)
+    const errorData = await safeJson<any>(response)
     return NextResponse.json(
       {
         ok: false,
@@ -167,16 +170,17 @@ export async function DELETE() {
     )
   }
 
-  const response = await fetch(`${META_API_BASE}/${credentials.businessAccountId}/subscribed_apps`, {
+  const response = await fetchWithTimeout(`${META_API_BASE}/${credentials.businessAccountId}/subscribed_apps`, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${credentials.accessToken}`,
     },
     cache: 'no-store',
+    timeoutMs: 12000,
   })
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null)
+    const errorData = await safeJson<any>(response)
     return NextResponse.json(
       {
         ok: false,

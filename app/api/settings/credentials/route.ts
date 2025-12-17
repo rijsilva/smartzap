@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -111,7 +112,10 @@ export async function GET() {
 // POST - Validate AND Save credentials to DB
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const body = await request.json().catch(() => null)
+    if (!body) {
+      return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
+    }
     const { phoneNumberId, businessAccountId, accessToken } = body
 
     if (!phoneNumberId || !businessAccountId || !accessToken) {
@@ -122,27 +126,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate token by making a test call to Meta API
-    const testResponse = await fetch(
+    const testResponse = await fetchWithTimeout(
       `https://graph.facebook.com/v24.0/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`,
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
+        timeoutMs: 8000,
       }
     )
 
     if (!testResponse.ok) {
-      const error = await testResponse.json()
+      const error = await safeJson<any>(testResponse)
       return NextResponse.json(
         {
           error: 'Invalid credentials - Meta API rejected the token',
-          details: error.error?.message || 'Unknown error'
+          details: error?.error?.message || 'Unknown error'
         },
         { status: 401 }
       )
     }
 
-    const phoneData = await testResponse.json()
+    const phoneData = await safeJson<any>(testResponse)
 
     // Save to Database (Persist across refreshes)
     await settingsDb.saveAll({
@@ -165,7 +170,7 @@ export async function POST(request: NextRequest) {
     console.error('Error validating credentials:', error)
     return NextResponse.json(
       { error: 'Failed to validate credentials' },
-      { status: 500 }
+      { status: isAbortError(error) ? 504 : 502 }
     )
   }
 }

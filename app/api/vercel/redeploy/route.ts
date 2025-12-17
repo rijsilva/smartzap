@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { fetchWithTimeout, isAbortError } from '@/lib/server-http'
 
 export async function POST() {
   // Para fazer redeploy via API da Vercel, precisamos:
@@ -24,8 +25,9 @@ export async function POST() {
   }
 
   try {
-    const response = await fetch(deployHookUrl, {
+    const response = await fetchWithTimeout(deployHookUrl, {
       method: 'POST',
+      timeoutMs: 8000,
     })
 
     if (response.ok) {
@@ -43,6 +45,6 @@ export async function POST() {
     return NextResponse.json({
       success: false,
       message: error instanceof Error ? error.message : 'Erro desconhecido',
-    }, { status: 500 })
+    }, { status: isAbortError(error) ? 504 : 502 })
   }
 }

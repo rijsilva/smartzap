@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,13 +15,14 @@ async function graphGet(path: string, accessToken: string, params?: Record<strin
   const url = new URL(`${META_API_BASE}${path.startsWith('/') ? path : `/${path}`}`)
   for (const [k, v] of Object.entries(params || {})) url.searchParams.set(k, String(v))
 
-  const res = await fetch(url.toString(), {
+  const res = await fetchWithTimeout(url.toString(), {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: 'no-store',
+    timeoutMs: 8000,
   })
 
-  const json = await res.json().catch(() => null)
+  const json = await safeJson<any>(res)
   return { ok: res.ok, status: res.status, json }
 }
 

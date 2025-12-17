@@ -7,6 +7,7 @@ import { templateDb } from '@/lib/supabase-db'
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { getActiveSuppressionsByPhone } from '@/lib/phone-suppressions'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 import { CampaignStatus, ContactStatus } from '@/types'
 
@@ -735,14 +736,15 @@ export async function POST(request: NextRequest) {
       // DEV: Call workflow endpoint directly (QStash can't reach localhost)
       console.log('[Dispatch] Localhost detected - calling workflow directly (bypassing QStash)')
 
-      const response = await fetch(`${baseUrl}/api/campaign/workflow`, {
+      const response = await fetchWithTimeout(`${baseUrl}/api/campaign/workflow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(workflowPayload),
+        timeoutMs: 30000,
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+        const errorData = (await safeJson<any>(response)) || {}
         throw new Error(errorData.error || `Workflow failed with status ${response.status}`)
       }
     } else {

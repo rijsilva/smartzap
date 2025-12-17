@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { fetchWithTimeout, safeJson, isAbortError } from '@/lib/server-http'
 
 // GET /api/debug/meta/template-analytics?name=<template_name>&start=<unix>&end=<unix>&granularity=daily
 // Retorna métricas oficiais da Meta (sent/delivered/read) para um template em um intervalo.
@@ -50,11 +51,12 @@ export async function GET(request: NextRequest) {
     templateLookupUrl.searchParams.set('name', name)
     templateLookupUrl.searchParams.set('fields', 'id,name,language,category,status')
 
-    const lookupRes = await fetch(templateLookupUrl.toString(), {
+    const lookupRes = await fetchWithTimeout(templateLookupUrl.toString(), {
       headers: { Authorization: `Bearer ${credentials.accessToken}` },
+      timeoutMs: 12000,
     })
 
-    const lookupJson = await lookupRes.json().catch(() => null)
+    const lookupJson = await safeJson<any>(lookupRes)
     if (!lookupRes.ok) {
       return NextResponse.json(
         {
@@ -84,11 +86,12 @@ export async function GET(request: NextRequest) {
     // A API espera array de ids no formato [<id1>,<id2>] (docs). Mantemos isso.
     analyticsUrl.searchParams.set('template_ids', `[${metaTemplateId}]`)
 
-    const analyticsRes = await fetch(analyticsUrl.toString(), {
+    const analyticsRes = await fetchWithTimeout(analyticsUrl.toString(), {
       headers: { Authorization: `Bearer ${credentials.accessToken}` },
+      timeoutMs: 12000,
     })
 
-    const analyticsJson = await analyticsRes.json().catch(() => null)
+    const analyticsJson = await safeJson<any>(analyticsRes)
     if (!analyticsRes.ok) {
       return NextResponse.json(
         {
@@ -117,7 +120,7 @@ export async function GET(request: NextRequest) {
     console.error('Debug Meta Template Analytics Error:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro interno' },
-      { status: 500 }
+      { status: isAbortError(error) ? 504 : 502 }
     )
   }
 }

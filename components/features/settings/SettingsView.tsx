@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, HelpCircle, Save, RefreshCw, Wifi, Edit2, Shield, AlertCircle, UserCheck, Smartphone, X, Copy, Check, ExternalLink, Webhook, Clock, Phone, Trash2, Loader2, ChevronDown, ChevronUp, Zap, ArrowDown, CheckCircle2, Circle, Lock, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
@@ -234,6 +234,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // Refs para UX: o formulário de credenciais fica bem abaixo do card.
+  // Sem scroll automático, parece que o botão "Editar" não funcionou.
+  const statusCardRef = useRef<HTMLDivElement | null>(null);
+  const credentialsFormRef = useRef<HTMLDivElement | null>(null);
+
   // Test contact editing
   const [isEditingTestContact, setIsEditingTestContact] = useState(false);
   const [testContactName, setTestContactName] = useState(testContact?.name || '');
@@ -321,6 +326,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       cancelled = true;
     };
   }, [isTurboPlannerOpen, plannerBaselineMetaMs, plannerLatencyTouched]);
+
+  useEffect(() => {
+    // Quando o usuário ativa o modo edição, rolar até o formulário.
+    if (!isEditing) return;
+
+    // Aguarda o render do bloco condicional.
+    const t = window.setTimeout(() => {
+      credentialsFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+
+    return () => window.clearTimeout(t);
+  }, [isEditing]);
 
   const turboPlan = useMemo(() => {
     const msgs = Math.max(1, Math.floor(Number(plannerMessages) || 0));
@@ -764,7 +781,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <div className="space-y-8">
         {/* Status Card */}
-        <div className={`glass-panel rounded-2xl p-8 flex items-start gap-6 border transition-all duration-500 ${settings.isConnected ? 'border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.1)]' : 'border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.1)]'}`}>
+        <div
+          ref={statusCardRef}
+          className={`glass-panel rounded-2xl p-8 flex items-start gap-6 border transition-all duration-500 ${settings.isConnected ? 'border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.1)]' : 'border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.1)]'}`}
+        >
           <div className={`p-4 rounded-2xl ${settings.isConnected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
             {settings.isConnected ? <Wifi size={32} /> : <AlertTriangle size={32} />}
           </div>
@@ -837,7 +857,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {settings.isConnected && (
             <div className="flex flex-col gap-3 min-w-35">
               <button
-                onClick={() => setIsEditing(!isEditing)}
+                onClick={() => {
+                  // Toggle simples. O scroll é feito no useEffect quando vira true.
+                  setIsEditing((v) => !v);
+                }}
                 className={`group relative overflow-hidden rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2
                   ${isEditing
                     ? 'bg-white text-black shadow-lg hover:bg-gray-100'
@@ -1044,7 +1067,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* Form - Only visible if disconnected OR editing */}
         {(!settings.isConnected || isEditing) && (
-          <div className="glass-panel rounded-2xl p-8 animate-in slide-in-from-top-4 duration-300">
+          <div ref={credentialsFormRef} className="glass-panel rounded-2xl p-8 animate-in slide-in-from-top-4 duration-300 scroll-mt-24">
             <h3 className="text-lg font-semibold text-white mb-8 flex items-center gap-2">
               <span className="w-1 h-6 bg-primary-500 rounded-full"></span>
               Configuração da API

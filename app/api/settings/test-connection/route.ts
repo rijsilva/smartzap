@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { getMetaAppCredentials } from '@/lib/meta-app-credentials'
+import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
 type GraphApiError = {
   message?: string
@@ -28,13 +29,14 @@ async function graphGetJson<T>(
   }
 
   const url = `https://graph.facebook.com/v24.0/${path.replace(/^\//, '')}${sp.toString() ? `?${sp.toString()}` : ''}`
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
     cache: 'no-store',
+    timeoutMs: 4500,
   })
-  const json = await res.json().catch(() => ({}))
+  const json = (await safeJson<any>(res)) ?? {}
   if (!res.ok) {
     return { ok: false, json, graphError: normalizeGraphApiError(json) }
   }

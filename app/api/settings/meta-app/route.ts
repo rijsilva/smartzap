@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { getMetaAppConfigPublic } from '@/lib/meta-app-credentials'
+import { isSupabaseConfigured } from '@/lib/supabase'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 // GET - Retorna status público (não expõe o secret)
 export async function GET() {
@@ -15,7 +19,14 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Error fetching Meta App config:', error)
-    return NextResponse.json({ error: 'Failed to fetch Meta App config' }, { status: 500 })
+    // Evita 500 para não quebrar a página de Settings.
+    return NextResponse.json({
+      source: 'none',
+      appId: null,
+      hasAppSecret: false,
+      isConfigured: false,
+      ...(isSupabaseConfigured() ? { warning: 'Falha ao carregar config do Meta App.' } : { warning: 'Supabase não configurado.' }),
+    })
   }
 }
 
@@ -23,6 +34,10 @@ export async function GET() {
 // Observação: secret NUNCA é retornado; no máximo confirmamos booleanos.
 export async function POST(request: NextRequest) {
   try {
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ error: 'Supabase não configurado. Complete o setup antes de salvar.' }, { status: 400 })
+    }
+
     const body = await request.json().catch(() => ({}))
     const appId = String((body as any)?.appId || '').trim()
     const appSecret = String((body as any)?.appSecret || '').trim()
@@ -41,13 +56,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, ...cfg })
   } catch (error) {
     console.error('Error saving Meta App config:', error)
-    return NextResponse.json({ error: 'Failed to save Meta App config' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to save Meta App config' }, { status: 502 })
   }
 }
 
 // DELETE - Remove do DB (não mexe nas env vars)
 export async function DELETE() {
   try {
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ error: 'Supabase não configurado. Complete o setup antes de remover.' }, { status: 400 })
+    }
+
     await settingsDb.set('metaAppId', '')
     await settingsDb.set('metaAppSecret', '')
 
@@ -55,6 +74,6 @@ export async function DELETE() {
     return NextResponse.json({ success: true, ...cfg })
   } catch (error) {
     console.error('Error deleting Meta App config:', error)
-    return NextResponse.json({ error: 'Failed to delete Meta App config' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to delete Meta App config' }, { status: 502 })
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { fetchWithTimeout, safeText } from '@/lib/server-http'
 
 // Tier limits mapping
 const TIER_LIMITS: Record<string, number> = {
@@ -15,21 +16,21 @@ const TIER_LIMITS: Record<string, number> = {
 async function fetchLimitsFromMeta(phoneNumberId: string, accessToken: string) {
   // Parallel fetch for throughput/quality and messaging tier
   const [throughputResponse, tierResponse] = await Promise.all([
-    fetch(
+    fetchWithTimeout(
       // Observação: para WhatsAppBusinessPhoneNumber, o campo mais confiável para qualidade é `quality_rating`.
       // Mantemos `quality_score` como fallback quando disponível.
       `https://graph.facebook.com/v24.0/${phoneNumberId}?fields=throughput,quality_rating,quality_score`,
-      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+      { headers: { 'Authorization': `Bearer ${accessToken}` }, timeoutMs: 3500 }
     ),
-    fetch(
+    fetchWithTimeout(
       `https://graph.facebook.com/v24.0/${phoneNumberId}?fields=whatsapp_business_manager_messaging_limit`,
-      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+      { headers: { 'Authorization': `Bearer ${accessToken}` }, timeoutMs: 3500 }
     ),
   ])
 
   if (!throughputResponse.ok || !tierResponse.ok) {
-    const errorThroughput = !throughputResponse.ok ? await throughputResponse.text() : null
-    const errorTier = !tierResponse.ok ? await tierResponse.text() : null
+    const errorThroughput = !throughputResponse.ok ? await safeText(throughputResponse) : null
+    const errorTier = !tierResponse.ok ? await safeText(tierResponse) : null
     console.error('❌ Failed to fetch account limits from Meta:', { errorThroughput, errorTier })
     throw new Error('Failed to fetch limits from Meta API')
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
+import { isSupabaseConfigured } from '@/lib/supabase'
 
 const CONFIG_KEY = 'auto_suppression_config'
 
@@ -44,7 +45,14 @@ function defaultConfig(): AutoSuppressionConfig {
 }
 
 async function getConfigFromDbOrDefault(): Promise<{ config: AutoSuppressionConfig; source: 'db' | 'default' }> {
-  const raw = await settingsDb.get(CONFIG_KEY)
+  let raw: string | null = null
+  if (isSupabaseConfigured()) {
+    try {
+      raw = await settingsDb.get(CONFIG_KEY)
+    } catch {
+      raw = null
+    }
+  }
   if (raw) {
     try {
       const parsed = JSON.parse(raw)
@@ -78,12 +86,17 @@ export async function GET() {
     return NextResponse.json({ ok: true, source, config })
   } catch (error) {
     console.error('Error fetching auto-suppression config:', error)
-    return NextResponse.json({ ok: false, error: 'Failed to fetch config' }, { status: 500 })
+    // Evita 500 para não quebrar telas que consultam config.
+    return NextResponse.json({ ok: true, source: 'default', config: defaultConfig(), warning: 'Falha ao carregar config; usando default.' })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ ok: false, error: 'Supabase não configurado. Complete o setup antes de salvar.' }, { status: 400 })
+    }
+
     const body = await request.json().catch(() => ({}))
     const current = await getConfigFromDbOrDefault()
 
@@ -130,6 +143,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, config: next })
   } catch (error) {
     console.error('Error saving auto-suppression config:', error)
-    return NextResponse.json({ ok: false, error: 'Failed to save config' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: 'Failed to save config' }, { status: 502 })
   }
 }

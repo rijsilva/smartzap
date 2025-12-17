@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getWhatsAppCredentials, getCredentialsSource } from '@/lib/whatsapp-credentials'
 import { supabase } from '@/lib/supabase'
+import { fetchWithTimeout } from '@/lib/server-http'
 
 /**
  * GET /api/system
@@ -215,8 +216,9 @@ export async function GET() {
 
           if (supabaseToken && projectRef) {
             try {
-              const projectsRes = await fetch('https://api.supabase.com/v1/projects', {
+              const projectsRes = await fetchWithTimeout('https://api.supabase.com/v1/projects', {
                 headers: { 'Authorization': `Bearer ${supabaseToken}` },
+                timeoutMs: 3500,
               })
 
               if (projectsRes.ok) {
@@ -224,8 +226,9 @@ export async function GET() {
                 const project = projects.find((p: any) => p.ref === projectRef)
 
                 if (project?.organization_id) {
-                  const orgRes = await fetch(`https://api.supabase.com/v1/organizations/${project.organization_id}`, {
+                  const orgRes = await fetchWithTimeout(`https://api.supabase.com/v1/organizations/${project.organization_id}`, {
                     headers: { 'Authorization': `Bearer ${supabaseToken}` },
+                    timeoutMs: 3500,
                   })
 
                   if (orgRes.ok) {
@@ -334,8 +337,9 @@ export async function GET() {
         if (upstashEmail && upstashApiKey) {
           try {
             const auth = Buffer.from(`${upstashEmail}:${upstashApiKey}`).toString('base64')
-            const statsRes = await fetch('https://api.upstash.com/v2/qstash/stats', {
+            const statsRes = await fetchWithTimeout('https://api.upstash.com/v2/qstash/stats', {
               headers: { 'Authorization': `Basic ${auth}` },
+              timeoutMs: 3500,
             })
 
             if (statsRes.ok) {
@@ -370,8 +374,9 @@ export async function GET() {
 
         if (credentials) {
           const testUrl = `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}?fields=display_phone_number,whatsapp_business_manager_messaging_limit,quality_score`
-          const res = await fetch(testUrl, {
+          const res = await fetchWithTimeout(testUrl, {
             headers: { 'Authorization': `Bearer ${credentials.accessToken}` },
+            timeoutMs: 3500,
           })
 
           if (res.ok) {
@@ -421,8 +426,9 @@ export async function GET() {
           const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
           const to = now.toISOString()
 
-          const userRes = await fetch('https://api.vercel.com/v2/user', {
+          const userRes = await fetchWithTimeout('https://api.vercel.com/v2/user', {
             headers: { 'Authorization': `Bearer ${vercelToken}` },
+            timeoutMs: 3500,
           })
 
           if (userRes.ok) {
@@ -431,8 +437,9 @@ export async function GET() {
 
             if (defaultTeamId) {
               try {
-                const teamRes = await fetch(`https://api.vercel.com/v2/teams/${defaultTeamId}`, {
+                const teamRes = await fetchWithTimeout(`https://api.vercel.com/v2/teams/${defaultTeamId}`, {
                   headers: { 'Authorization': `Bearer ${vercelToken}` },
+                  timeoutMs: 3500,
                 })
 
                 if (teamRes.ok) {
@@ -465,11 +472,13 @@ export async function GET() {
           const baseUrl = `https://api.vercel.com/v2/usage?teamId=${teamId}&from=${from}&to=${to}`
 
           const [requestsRes, buildsRes] = await Promise.all([
-            fetch(`${baseUrl}&type=requests`, {
+            fetchWithTimeout(`${baseUrl}&type=requests`, {
               headers: { 'Authorization': `Bearer ${vercelToken}` },
+              timeoutMs: 3500,
             }),
-            fetch(`${baseUrl}&type=builds`, {
+            fetchWithTimeout(`${baseUrl}&type=builds`, {
               headers: { 'Authorization': `Bearer ${vercelToken}` },
+              timeoutMs: 3500,
             }),
           ])
 

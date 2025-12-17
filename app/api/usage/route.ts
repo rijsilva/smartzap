@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { fetchWithTimeout } from '@/lib/server-http'
 
 interface UsageData {
   vercel: {
@@ -114,8 +115,9 @@ export async function GET() {
 
     if (upstashEmail && upstashApiKey && process.env.QSTASH_TOKEN) {
       const auth = Buffer.from(`${upstashEmail}:${upstashApiKey}`).toString('base64')
-      const statsRes = await fetch('https://api.upstash.com/v2/qstash/stats', {
+      const statsRes = await fetchWithTimeout('https://api.upstash.com/v2/qstash/stats', {
         headers: { 'Authorization': `Basic ${auth}` },
+        timeoutMs: 3500,
       })
 
       if (statsRes.ok) {
@@ -171,13 +173,13 @@ export async function GET() {
     if (credentials) {
       try {
         const [tierResponse, qualityResponse] = await Promise.all([
-          fetch(
+          fetchWithTimeout(
             `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}?fields=whatsapp_business_manager_messaging_limit`,
-            { headers: { 'Authorization': `Bearer ${credentials.accessToken}` } }
+            { headers: { 'Authorization': `Bearer ${credentials.accessToken}` }, timeoutMs: 3500 }
           ),
-          fetch(
+          fetchWithTimeout(
             `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}?fields=quality_score`,
-            { headers: { 'Authorization': `Bearer ${credentials.accessToken}` } }
+            { headers: { 'Authorization': `Bearer ${credentials.accessToken}` }, timeoutMs: 3500 }
           )
         ])
 
@@ -228,11 +230,13 @@ export async function GET() {
       const baseUrl = `https://api.vercel.com/v2/usage?teamId=${teamId}&from=${from}&to=${to}`
 
       const [requestsResponse, buildsResponse] = await Promise.all([
-        fetch(`${baseUrl}&type=requests`, {
+        fetchWithTimeout(`${baseUrl}&type=requests`, {
           headers: { 'Authorization': `Bearer ${process.env.VERCEL_API_TOKEN}` },
+          timeoutMs: 3500,
         }),
-        fetch(`${baseUrl}&type=builds`, {
+        fetchWithTimeout(`${baseUrl}&type=builds`, {
           headers: { 'Authorization': `Bearer ${process.env.VERCEL_API_TOKEN}` },
+          timeoutMs: 3500,
         }),
       ])
 

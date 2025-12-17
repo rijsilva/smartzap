@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { getAdaptiveThrottleState, setAdaptiveThrottleState } from '@/lib/whatsapp-adaptive-throttle'
+import { isSupabaseConfigured } from '@/lib/supabase'
 
 const CONFIG_KEY = 'whatsapp_adaptive_throttle_config'
 
@@ -45,7 +46,14 @@ function configFromEnv(): WhatsAppAdaptiveThrottleConfig {
 }
 
 async function getConfigFromDbOrEnv(): Promise<{ config: WhatsAppAdaptiveThrottleConfig; source: 'db' | 'env' }> {
-  const raw = await settingsDb.get(CONFIG_KEY)
+  let raw: string | null = null
+  if (isSupabaseConfigured()) {
+    try {
+      raw = await settingsDb.get(CONFIG_KEY)
+    } catch {
+      raw = null
+    }
+  }
   if (raw) {
     try {
       const parsed = JSON.parse(raw)
@@ -91,12 +99,17 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Error fetching whatsapp throttle config:', error)
-    return NextResponse.json({ ok: false, error: 'Failed to fetch config' }, { status: 500 })
+    // Evita 500 para não quebrar UX; devolve config do env como fallback.
+    return NextResponse.json({ ok: true, source: 'env', phoneNumberId: null, config: configFromEnv(), state: null, warning: 'Falha ao carregar config; usando env.' })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ ok: false, error: 'Supabase não configurado. Complete o setup antes de salvar.' }, { status: 400 })
+    }
+
     const body = await request.json().catch(() => ({}))
 
     const current = await getConfigFromDbOrEnv()
@@ -141,6 +154,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, config: next })
   } catch (error) {
     console.error('Error saving whatsapp throttle config:', error)
-    return NextResponse.json({ ok: false, error: 'Failed to save config' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: 'Failed to save config' }, { status: 502 })
   }
 }

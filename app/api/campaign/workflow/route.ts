@@ -49,15 +49,129 @@ function getTemplateHeaderMediaExampleLink(template: any): { format?: string; ex
   return { format, example }
 }
 
+function overrideTemplateHeaderExampleLink(template: any, link: string): any {
+  const components = (template as any)?.components
+  if (!Array.isArray(components)) return template
+
+  const nextComponents = components.map((c: any) => {
+    const type = String(c?.type || '').toUpperCase()
+    if (type !== 'HEADER') return c
+
+    let exampleObj: any = c.example
+    if (typeof c.example === 'string') {
+      try {
+        exampleObj = JSON.parse(c.example)
+      } catch {
+        exampleObj = undefined
+      }
+    }
+
+    const nextExample = {
+      ...(exampleObj && typeof exampleObj === 'object' ? exampleObj : {}),
+      header_handle: [link],
+    }
+
+    return {
+      ...c,
+      // Mantemos o formato (IMAGE/VIDEO/DOCUMENT/GIF) e forçamos o exemplo.
+      example: nextExample,
+    }
+  })
+
+  return { ...template, components: nextComponents }
+}
+
 function isWeplinkForbiddenMediaError(args: {
-  errorCode: number
+  errorCode?: number
+  metaTitle?: string
   metaMessage?: string
   metaDetails?: string
 }): boolean {
+  // Observação: já vimos variações de código/mensagem em produção.
+  // Vamos detectar pelo texto para não depender apenas do code.
   const code = Number(args.errorCode || 0)
-  if (code !== 131052 && code !== 131053 && code !== 131054) return false
-  const blob = `${args.metaMessage || ''} ${args.metaDetails || ''}`.toLowerCase()
-  return blob.includes('weblink') && (blob.includes('403') || blob.includes('forbidden'))
+  const blob = `${args.metaTitle || ''} ${args.metaMessage || ''} ${args.metaDetails || ''}`.toLowerCase()
+
+  const looksLikeWeplink = blob.includes('weblink') || blob.includes('downloading media from weblink')
+  const looksForbidden = blob.includes('http code 403') || blob.includes(' 403') || blob.includes('forbidden')
+  if (looksLikeWeplink && looksForbidden) return true
+
+  // Fallback: se o code já é um erro de mídia conhecido, exige pelo menos menção a weblink.
+  if (code === 131052 || code === 131053 || code === 131054) {
+    return blob.includes('weblink') && (blob.includes('403') || blob.includes('forbidden'))
+  }
+
+  return false
+}
+
+function getUrlHost(value: string): string | null {
+  try {
+    const u = new URL(value)
+    return u.host || null
+  } catch {
+    return null
+  }
+}
+
+function guessExtFromContentType(contentType: string | null | undefined): string {
+  const ct = String(contentType || '').toLowerCase().split(';')[0].trim()
+  if (ct === 'image/jpeg' || ct === 'image/jpg') return 'jpg'
+  if (ct === 'image/png') return 'png'
+  if (ct === 'image/webp') return 'webp'
+  if (ct === 'image/gif') return 'gif'
+  if (ct === 'video/mp4') return 'mp4'
+  if (ct === 'video/quicktime') return 'mov'
+  if (ct === 'application/pdf') return 'pdf'
+  return 'bin'
+}
+
+async function tryDownloadBinary(url: string, accessToken?: string): Promise<{
+  ok: boolean
+  status: number
+  contentType?: string
+  size?: number
+  buffer?: Buffer
+  error?: string
+}> {
+  const timeoutMs = Number(process.env.MEDIA_DOWNLOAD_TIMEOUT_MS || '20000')
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  const attempt = async (headers?: Record<string, string>) => {
+    const res = await fetch(url, { method: 'GET', headers, signal: controller.signal })
+    const contentType = res.headers.get('content-type') || undefined
+    if (!res.ok) {
+      return { ok: false, status: res.status, contentType, error: `HTTP ${res.status}` }
+    }
+    const ab = await res.arrayBuffer()
+    const buffer = Buffer.from(ab)
+    return {
+      ok: true,
+      status: res.status,
+      contentType,
+      size: buffer.byteLength,
+      buffer,
+    }
+  }
+
+  try {
+    // 1) Sem auth (ideal: URL realmente público)
+    const a1 = await attempt()
+    if (a1.ok) return a1
+
+    // 2) Com Bearer token (muitos weblinks do Graph exigem isso)
+    if (accessToken) {
+      const a2 = await attempt({ Authorization: `Bearer ${accessToken}` })
+      return a2
+    }
+
+    return a1
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, status: 0, error: msg }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 async function fetchSingleTemplateFromMeta(params: {
@@ -520,6 +634,11 @@ export const { POST } = serve<CampaignWorkflowInput>(
           let refreshedTemplateForBatch: any | null = null
           let refreshPromise: Promise<any | null> | null = null
 
+          // Fallback: quando o weblink retornado pela Meta não é acessível pelos servidores do WhatsApp,
+          // tentamos baixar a mídia no backend e re-hospedar em um URL público (Supabase Storage).
+          let hostedHeaderMediaUrlForBatch: string | null = null
+          let hostPromise: Promise<string | null> | null = null
+
           const ensureRefreshedTemplateForBatch = async (): Promise<any | null> => {
             if (refreshedTemplateForBatch) return refreshedTemplateForBatch
             if (refreshPromise) return await refreshPromise
@@ -547,6 +666,66 @@ export const { POST } = serve<CampaignWorkflowInput>(
             })()
 
             const out = await refreshPromise
+            return out
+          }
+
+          const ensureHostedHeaderMediaUrlForBatch = async (templateCandidate?: any): Promise<string | null> => {
+            if (hostedHeaderMediaUrlForBatch) return hostedHeaderMediaUrlForBatch
+            if (hostPromise) return await hostPromise
+
+            hostPromise = (async () => {
+              try {
+                const active = templateCandidate || refreshedTemplateForBatch || templateForBatch
+                const headerInfo = getTemplateHeaderMediaExampleLink(active)
+                const example = headerInfo.example
+                if (!example || !isHttpUrl(example)) return null
+
+                // Limites defensivos (evita subir arquivos gigantes por acidente)
+                const maxBytes = Number(process.env.MEDIA_REHOST_MAX_BYTES || String(25 * 1024 * 1024))
+
+                const downloaded = await tryDownloadBinary(example, accessToken)
+                if (!downloaded.ok || !downloaded.buffer) return null
+                if (typeof downloaded.size === 'number' && downloaded.size > maxBytes) return null
+
+                const client = supabase.admin
+                if (!client) return null
+
+                const bucket = String(process.env.SUPABASE_TEMPLATE_MEDIA_BUCKET || 'wa-template-media')
+                // Best-effort: cria bucket público se não existir.
+                try {
+                  await client.storage.createBucket(bucket, { public: true })
+                } catch {
+                  // ignore (já existe / sem permissão)
+                }
+
+                const contentType = downloaded.contentType || 'application/octet-stream'
+                const ext = guessExtFromContentType(contentType)
+                const urlHash = createHash('sha256').update(example).digest('hex').slice(0, 12)
+                const specHash = String((active as any)?.spec_hash || (active as any)?.specHash || 'na')
+                const safeName = String(templateName || 'template').replace(/[^a-zA-Z0-9_\-]/g, '_')
+                const path = `templates/${safeName}/${specHash}_${urlHash}.${ext}`
+
+                const up = await client.storage
+                  .from(bucket)
+                  .upload(path, downloaded.buffer, {
+                    contentType,
+                    upsert: true,
+                    cacheControl: '3600',
+                  })
+
+                if (up.error) return null
+
+                const pub = client.storage.from(bucket).getPublicUrl(path)
+                const publicUrl = pub?.data?.publicUrl
+                hostedHeaderMediaUrlForBatch = publicUrl || null
+                return hostedHeaderMediaUrlForBatch
+              } catch (e) {
+                console.warn('[Workflow] Falha ao re-hospedar mídia do header (best-effort):', e)
+                return null
+              }
+            })()
+
+            const out = await hostPromise
             return out
           }
 
@@ -989,13 +1168,18 @@ export const { POST } = serve<CampaignWorkflowInput>(
               // Estratégia: refresh pontual do template (Meta → local) e retry 1x.
               const activeTemplate0 = refreshedTemplateForBatch || templateForBatch
               const headerInfo0 = getTemplateHeaderMediaExampleLink(activeTemplate0)
-              const canRetryWithRefresh =
-                Boolean(headerInfo0.format && ['IMAGE', 'VIDEO', 'DOCUMENT', 'GIF'].includes(String(headerInfo0.format))) &&
-                isWeplinkForbiddenMediaError({
-                  errorCode,
-                  metaMessage,
-                  metaDetails,
-                })
+              const isWeplink403 = isWeplinkForbiddenMediaError({
+                errorCode,
+                metaTitle,
+                metaMessage,
+                metaDetails,
+              })
+
+              const headerIsMedia = Boolean(
+                headerInfo0.format && ['IMAGE', 'VIDEO', 'DOCUMENT', 'GIF'].includes(String(headerInfo0.format))
+              )
+
+              const canRetryWithRefresh = headerIsMedia && isWeplink403
 
               if (canRetryWithRefresh) {
                 try {
@@ -1012,6 +1196,7 @@ export const { POST } = serve<CampaignWorkflowInput>(
                       errorCode,
                       headerFormat: headerInfo0.format,
                       examplePreview: headerInfo0.example || null,
+                      exampleHost: headerInfo0.example ? getUrlHost(headerInfo0.example) : null,
                     },
                   })
 
@@ -1116,11 +1301,140 @@ export const { POST } = serve<CampaignWorkflowInput>(
                         reason: 'no_http_example_after_refresh',
                         headerFormat: headerInfo1.format || null,
                         examplePreview: headerInfo1.example || null,
+                        exampleHost: headerInfo1.example ? getUrlHost(headerInfo1.example) : null,
                       },
                     })
                   }
                 } catch (e) {
                   console.warn('[Workflow] Retry após refresh do template falhou (seguindo com erro original):', e)
+                }
+              }
+
+              // Fallback extra: re-hospedar a mídia do HEADER em um URL público, pois o weblink pode não ser
+              // acessível para os servidores do WhatsApp, mesmo após refresh.
+              if (headerIsMedia && isWeplink403) {
+                try {
+                  const activeTemplateForRehost = refreshedTemplateForBatch || templateForBatch
+                  const headerInfo = getTemplateHeaderMediaExampleLink(activeTemplateForRehost)
+
+                  await emitWorkflowTrace({
+                    traceId,
+                    campaignId,
+                    step,
+                    batchIndex,
+                    contactId: contact.contactId,
+                    phoneMasked,
+                    phase: 'template_media_rehost_start',
+                    ok: true,
+                    extra: {
+                      errorCode,
+                      headerFormat: headerInfo.format || null,
+                      sourceHost: headerInfo.example ? getUrlHost(headerInfo.example) : null,
+                    },
+                  })
+
+                  const hostedUrl = await ensureHostedHeaderMediaUrlForBatch(activeTemplateForRehost)
+                  if (hostedUrl) {
+                    const patched = overrideTemplateHeaderExampleLink(activeTemplateForRehost, hostedUrl)
+
+                    const retryPayload = buildMetaTemplatePayload({
+                      to: precheck.normalizedPhone,
+                      templateName,
+                      language: (patched as any).language || 'pt_BR',
+                      parameterFormat:
+                        (patched as any).parameter_format || (patched as any).parameterFormat || 'positional',
+                      values: precheck.values,
+                      template: patched as any,
+                    })
+
+                    const retryStart = Date.now()
+                    const controller3 = new AbortController()
+                    const timeout3 = setTimeout(() => controller3.abort(), metaTimeoutMs)
+                    let response3: Response
+                    let data3: any
+                    try {
+                      response3 = await fetch(`https://graph.facebook.com/v24.0/${phoneNumberId}/messages`, {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${accessToken}`,
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(retryPayload),
+                        signal: controller3.signal,
+                      })
+                      data3 = await response3.json()
+                    } finally {
+                      clearTimeout(timeout3)
+                    }
+
+                    const retryMs = Date.now() - retryStart
+                    metaTimeMs += retryMs
+
+                    if (response3.ok && data3?.messages?.[0]?.id) {
+                      const messageId = data3.messages[0].id
+                      const db0 = Date.now()
+                      await updateContactStatus(
+                        campaignId,
+                        { contactId: contact.contactId, phone: contact.phone },
+                        'sent',
+                        { sendingAt: sendingAtIso, messageId, traceId }
+                      )
+                      dbTimeMs += Date.now() - db0
+                      lastSentAtInBatch = new Date().toISOString()
+
+                      await emitWorkflowTrace({
+                        traceId,
+                        campaignId,
+                        step,
+                        batchIndex,
+                        contactId: contact.contactId,
+                        phoneMasked,
+                        phase: 'template_media_rehost_ok',
+                        ok: true,
+                        ms: retryMs,
+                        extra: { messageId, hostedHost: getUrlHost(hostedUrl) },
+                      })
+
+                      sentCount++
+                      progress.bump({ sent: 1 })
+                      console.log(`✅ Sent (retry after media rehost) to ${contact.phone}`)
+                      return
+                    }
+
+                    await emitWorkflowTrace({
+                      traceId,
+                      campaignId,
+                      step,
+                      batchIndex,
+                      contactId: contact.contactId,
+                      phoneMasked,
+                      phase: 'template_media_rehost_fail',
+                      ok: false,
+                      ms: retryMs,
+                      extra: {
+                        status: response3.status,
+                        errorCode: data3?.error?.code,
+                        errorType: data3?.error?.type,
+                        fbtrace_id: data3?.error?.fbtrace_id,
+                      },
+                    })
+                  } else {
+                    await emitWorkflowTrace({
+                      traceId,
+                      campaignId,
+                      step,
+                      batchIndex,
+                      contactId: contact.contactId,
+                      phoneMasked,
+                      phase: 'template_media_rehost_skip',
+                      ok: true,
+                      extra: {
+                        reason: 'rehost_failed_or_unavailable',
+                      },
+                    })
+                  }
+                } catch (e) {
+                  console.warn('[Workflow] Rehost/Retry da mídia do template falhou (seguindo com erro original):', e)
                 }
               }
 

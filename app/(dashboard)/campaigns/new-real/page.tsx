@@ -364,6 +364,8 @@ export default function CampaignsNewRealPage() {
     if (!term) return templateOptions
     return templateOptions.filter((template) => template.name.toLowerCase().includes(term))
   }, [templateOptions, templateSearch])
+  const hasTemplateSearch = templateSearch.trim().length > 0
+  const showTemplateResults = showAllTemplates || hasTemplateSearch
 
   useEffect(() => {
     if (!selectedTemplate) return
@@ -1447,38 +1449,54 @@ export default function CampaignsNewRealPage() {
                       )}
                     </div>
 
-                    {showAllTemplates ? (
+                    {showTemplateResults ? (
                       <div className="mt-5 rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
                         <div className="flex items-center justify-between">
-                          <div className="text-xs uppercase tracking-widest text-gray-500">Todos os templates</div>
-                          <button
-                            type="button"
-                            onClick={() => setShowAllTemplates(false)}
-                            className="text-xs text-gray-400 hover:text-white"
-                          >
-                            Voltar para recentes
-                          </button>
+                          <div className="text-xs uppercase tracking-widest text-gray-500">
+                            {hasTemplateSearch ? 'Resultados da busca' : 'Todos os templates'}
+                          </div>
+                          {hasTemplateSearch ? (
+                            <button
+                              type="button"
+                              onClick={() => setTemplateSearch('')}
+                              className="text-xs text-gray-400 hover:text-white"
+                            >
+                              Limpar busca
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllTemplates(false)}
+                              className="text-xs text-gray-400 hover:text-white"
+                            >
+                              Voltar para recentes
+                            </button>
+                          )}
                         </div>
                         <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-2 text-sm">
-                          {filteredTemplates.map((template) => (
-                            <button
-                              key={template.id}
-                              type="button"
-                              onMouseEnter={() => setPreviewTemplate(template)}
-                              onMouseLeave={() => setPreviewTemplate(null)}
-                              onClick={() => {
-                                setSelectedTemplate(template)
-                                setTemplateSelected(true)
-                                setPreviewTemplate(null)
-                              }}
-                              className="w-full rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2 text-left text-gray-300 hover:border-emerald-400/40"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-semibold text-white">{template.name}</span>
-                                <span className="text-[10px] uppercase text-gray-500">{template.category}</span>
-                              </div>
-                            </button>
-                          ))}
+                          {filteredTemplates.length === 0 ? (
+                            <div className="text-xs text-gray-500">Nenhum template encontrado.</div>
+                          ) : (
+                            filteredTemplates.map((template) => (
+                              <button
+                                key={template.id}
+                                type="button"
+                                onMouseEnter={() => setPreviewTemplate(template)}
+                                onMouseLeave={() => setPreviewTemplate(null)}
+                                onClick={() => {
+                                  setSelectedTemplate(template)
+                                  setTemplateSelected(true)
+                                  setPreviewTemplate(null)
+                                }}
+                                className="w-full rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2 text-left text-gray-300 hover:border-emerald-400/40"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-white">{template.name}</span>
+                                  <span className="text-[10px] uppercase text-gray-500">{template.category}</span>
+                                </div>
+                              </button>
+                            ))
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -1529,13 +1547,15 @@ export default function CampaignsNewRealPage() {
                             </div>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowAllTemplates(true)}
-                          className="mt-4 text-xs text-emerald-300"
-                        >
-                          Ver todos os templates
-                        </button>
+                        {!showTemplateResults && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllTemplates(true)}
+                            className="mt-4 text-xs text-emerald-300"
+                          >
+                            Ver todos os templates
+                          </button>
+                        )}
                       </>
                     )}
                   </>

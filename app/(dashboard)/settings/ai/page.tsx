@@ -346,8 +346,7 @@ export default function AICenterPage() {
                 Prompt: Crie um template de confirmação de inscrição para evento com tom neutro.
               </div>
               <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3 text-xs text-gray-300">
-                Saída: “Olá {{1}}, sua inscrição para {{2}} foi confirmada. O evento começa em {{3}}
-                às {{4}}. Acesse {{5}} para detalhes.”
+                {`Saída: “Olá {{1}}, sua inscrição para {{2}} foi confirmada. O evento começa em {{3}} às {{4}}. Acesse {{5}} para detalhes.”`}
               </div>
             </div>
           </section>

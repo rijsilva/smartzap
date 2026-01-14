@@ -5,7 +5,6 @@ export * from './types';
 export * from './utils';
 
 // Components
-export { CheckCircleFilled } from './CheckCircleFilled';
 export { SummaryCards } from './SummaryCards';
 export { CampaignDetails } from './CampaignDetails';
 export { FinalCheckWarning } from './FinalCheckWarning';

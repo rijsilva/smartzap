@@ -3,7 +3,7 @@
 import React from 'react';
 import { Link as LinkIcon } from 'lucide-react';
 import { getPricingBreakdown } from '@/lib/whatsapp-pricing';
-import { CheckCircleFilled } from './CheckCircleFilled';
+import { CheckCircleFilled } from '@/components/ui/icons/CheckCircleFilled';
 import { AudienceCardSegmentsProps } from './types';
 
 export function AudienceCardSegments({

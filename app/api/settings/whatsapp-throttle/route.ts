@@ -3,6 +3,7 @@ import { settingsDb } from '@/lib/supabase-db'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { getAdaptiveThrottleState, setAdaptiveThrottleState } from '@/lib/whatsapp-adaptive-throttle'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { clampInt, boolFromUnknown } from '@/lib/validation-utils'
 
 const CONFIG_KEY = 'whatsapp_adaptive_throttle_config'
 
@@ -16,19 +17,6 @@ export interface WhatsAppAdaptiveThrottleConfig {
   cooldownSec: number
   minIncreaseGapSec: number
   sendFloorDelayMs: number
-}
-
-function clampInt(n: unknown, min: number, max: number): number {
-  const v = Number(n)
-  if (!Number.isFinite(v)) return min
-  return Math.min(max, Math.max(min, Math.floor(v)))
-}
-
-function boolFromUnknown(v: unknown): boolean {
-  if (typeof v === 'boolean') return v
-  if (typeof v === 'string') return v === '1' || v.toLowerCase() === 'true' || v.toLowerCase() === 'on'
-  if (typeof v === 'number') return v === 1
-  return false
 }
 
 function configFromEnv(): WhatsAppAdaptiveThrottleConfig {

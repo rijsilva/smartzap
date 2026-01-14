@@ -3,7 +3,7 @@
 import React from 'react';
 import { Users, Smartphone, ShieldAlert, Sparkles } from 'lucide-react';
 import { getPricingBreakdown } from '@/lib/whatsapp-pricing';
-import { CheckCircleFilled } from './CheckCircleFilled';
+import { CheckCircleFilled } from '@/components/ui/icons/CheckCircleFilled';
 import type { Template } from '@/types';
 
 interface LegacyAudienceModeProps {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { clampInt } from '@/lib/validation-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,11 +18,6 @@ function noStoreJson(payload: unknown, init?: { status?: number }) {
 function safeNumber(x: unknown): number | null {
   const n = Number(x)
   return Number.isFinite(n) ? n : null
-}
-
-function clampInt(n: number, min: number, max: number) {
-  if (!Number.isFinite(n)) return min
-  return Math.max(min, Math.min(max, Math.floor(n)))
 }
 
 function percentile(sorted: number[], p: number): number | null {

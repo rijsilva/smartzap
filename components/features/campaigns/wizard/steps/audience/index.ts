@@ -2,7 +2,6 @@
 export * from './types';
 
 // Components
-export { CheckCircleFilled } from './CheckCircleFilled';
 export { TestContactCard } from './TestContactCard';
 export { AudienceCardAll } from './AudienceCardAll';
 export { AudienceCardSegments } from './AudienceCardSegments';

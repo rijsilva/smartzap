@@ -5,6 +5,7 @@ import {
   clearWorkflowExecutionConfigCache,
   getWorkflowExecutionConfig,
 } from "@/lib/builder/workflow-execution-settings";
+import { clampInt } from "@/lib/validation-utils";
 
 const CONFIG_KEY = "workflow_execution_config";
 
@@ -13,12 +14,6 @@ type WorkflowExecutionConfig = {
   retryDelayMs: number;
   timeoutMs: number;
 };
-
-function clampInt(value: unknown, min: number, max: number): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return min;
-  return Math.min(max, Math.max(min, Math.floor(parsed)));
-}
 
 function fallbackConfig(): WorkflowExecutionConfig {
   return { retryCount: 0, retryDelayMs: 500, timeoutMs: 10000 };

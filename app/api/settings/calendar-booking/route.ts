@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { clampInt, boolFromUnknown } from '@/lib/validation-utils'
 
 const CONFIG_KEY = 'calendar_booking_config'
 
@@ -33,19 +34,6 @@ const DEFAULT_CONFIG: CalendarBookingConfig = {
     { day: 'sat', enabled: false, start: '09:00', end: '13:00' },
     { day: 'sun', enabled: false, start: '09:00', end: '13:00' },
   ],
-}
-
-function clampInt(value: unknown, min: number, max: number, fallback: number): number {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return fallback
-  return Math.min(max, Math.max(min, Math.floor(n)))
-}
-
-function boolFromUnknown(value: unknown, fallback: boolean): boolean {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'string') return value === '1' || value.toLowerCase() === 'true' || value.toLowerCase() === 'on'
-  if (typeof value === 'number') return value === 1
-  return fallback
 }
 
 function normalizeTime(value: unknown, fallback: string): string {

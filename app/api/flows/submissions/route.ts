@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { supabase } from '@/lib/supabase'
+import { clampInt } from '@/lib/validation-utils'
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -30,12 +31,6 @@ function isMissingColumn(error: unknown, column: string): boolean {
   const anyErr = error as any
   const msg = typeof anyErr.message === 'string' ? anyErr.message : ''
   return msg.toLowerCase().includes('column') && msg.toLowerCase().includes(column.toLowerCase())
-}
-
-function clampInt(value: string | null, min: number, max: number, fallback: number): number {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return fallback
-  return Math.min(max, Math.max(min, Math.trunc(n)))
 }
 
 /**

@@ -4,6 +4,7 @@ import { addMinutes } from 'date-fns'
 import { getCalendarConfig, listBusyTimes } from '@/lib/google-calendar'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { clampInt, boolFromUnknown } from '@/lib/validation-utils'
 
 type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
@@ -38,12 +39,6 @@ const DEFAULT_CONFIG: CalendarBookingConfig = {
 
 const WEEKDAY_KEYS: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
-function clampInt(value: unknown, min: number, max: number, fallback: number): number {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return fallback
-  return Math.min(max, Math.max(min, Math.floor(n)))
-}
-
 function normalizeTime(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback
   const trimmed = value.trim()
@@ -52,13 +47,6 @@ function normalizeTime(value: unknown, fallback: string): string {
   if (Number.isNaN(hh) || Number.isNaN(mm)) return fallback
   if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return fallback
   return trimmed
-}
-
-function boolFromUnknown(value: unknown, fallback: boolean): boolean {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'string') return value === '1' || value.toLowerCase() === 'true' || value.toLowerCase() === 'on'
-  if (typeof value === 'number') return value === 1
-  return fallback
 }
 
 function normalizeConfig(input?: Partial<CalendarBookingConfig>): CalendarBookingConfig {

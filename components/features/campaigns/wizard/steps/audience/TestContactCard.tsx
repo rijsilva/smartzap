@@ -3,7 +3,7 @@
 import React from 'react';
 import { FlaskConical } from 'lucide-react';
 import { getPricingBreakdown } from '@/lib/whatsapp-pricing';
-import { CheckCircleFilled } from './CheckCircleFilled';
+import { CheckCircleFilled } from '@/components/ui/icons/CheckCircleFilled';
 import { TestContactCardProps } from './types';
 
 export function TestContactCard({

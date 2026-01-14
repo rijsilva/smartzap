@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { settingsDb } from '@/lib/supabase-db'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { clampInt, boolFromUnknown } from '@/lib/validation-utils'
 
 const CONFIG_KEY = 'auto_suppression_config'
 
@@ -14,19 +15,6 @@ export interface AutoSuppressionConfig {
     ttl2Days: number
     ttl3Days: number
   }
-}
-
-function clampInt(n: unknown, min: number, max: number): number {
-  const v = Number(n)
-  if (!Number.isFinite(v)) return min
-  return Math.min(max, Math.max(min, Math.floor(v)))
-}
-
-function boolFromUnknown(v: unknown): boolean {
-  if (typeof v === 'boolean') return v
-  if (typeof v === 'string') return v === '1' || v.toLowerCase() === 'true' || v.toLowerCase() === 'on'
-  if (typeof v === 'number') return v === 1
-  return false
 }
 
 function defaultConfig(): AutoSuppressionConfig {

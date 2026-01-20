@@ -582,6 +582,9 @@ export interface InboxMessage {
 }
 
 // T004: AIAgent interface
+export type EmbeddingProvider = 'google' | 'openai' | 'voyage' | 'cohere';
+export type RerankProvider = 'cohere' | 'together';
+
 export interface AIAgent {
   id: string;
   name: string;
@@ -589,10 +592,21 @@ export interface AIAgent {
   model: string;
   temperature: number;
   max_tokens: number;
-  file_search_store_id: string | null;
   is_active: boolean;
   is_default: boolean;
   debounce_ms: number;
+  // RAG: Embedding config
+  embedding_provider: EmbeddingProvider | null;
+  embedding_model: string | null;
+  embedding_dimensions: number | null;
+  // RAG: Reranking config (opcional)
+  rerank_enabled: boolean | null;
+  rerank_provider: RerankProvider | null;
+  rerank_model: string | null;
+  rerank_top_k: number | null;
+  // RAG: Search config
+  rag_similarity_threshold: number | null;
+  rag_max_results: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -630,11 +644,23 @@ export interface AIKnowledgeFile {
   mime_type: string;
   size_bytes: number;
   content: string | null;
-  external_file_id: string | null;
-  external_file_uri: string | null;
+  external_file_id: string | null; // DEPRECATED: Era usado para Google File Search
+  external_file_uri: string | null; // DEPRECATED: Era usado para Google File Search
   indexing_status: KnowledgeFileIndexingStatus;
+  chunks_count: number; // Número de chunks indexados no pgvector
   created_at: string;
   updated_at: string;
+}
+
+// T058: AIEmbedding interface (para referência - dados ficam no pgvector)
+export interface AIEmbedding {
+  id: string;
+  agent_id: string;
+  file_id: string | null;
+  content: string;
+  dimensions: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 // T006: InboxLabel interface
@@ -690,7 +716,6 @@ export interface CreateAIAgentDTO {
   model?: string;
   temperature?: number;
   max_tokens?: number;
-  file_search_store_id?: string;
   is_active?: boolean;
   debounce_ms?: number;
 }

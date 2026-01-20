@@ -14,10 +14,13 @@
  * - Queries simples e diretas
  * - Latência crítica (adiciona 200-500ms)
  *
- * Providers suportados: Cohere, Together.ai
+ * NOTA: Reranking requer pacotes adicionais:
+ * - Cohere: npm install @ai-sdk/cohere
+ * - Together.ai: npm install @ai-sdk/togetherai
+ *
+ * Por enquanto, reranking está DESABILITADO por padrão.
+ * Para habilitar, instale os pacotes e configure no agente.
  */
-
-import { rerank } from 'ai'
 
 // =============================================================================
 // Types
@@ -49,6 +52,7 @@ export interface RerankProviderInfo {
     description: string
     pricePerMillion: number
   }>
+  requiresPackage: string
 }
 
 // =============================================================================
@@ -59,6 +63,7 @@ export const RERANK_PROVIDERS: RerankProviderInfo[] = [
   {
     id: 'cohere',
     name: 'Cohere',
+    requiresPackage: '@ai-sdk/cohere',
     models: [
       {
         id: 'rerank-v3.5',
@@ -83,6 +88,7 @@ export const RERANK_PROVIDERS: RerankProviderInfo[] = [
   {
     id: 'together',
     name: 'Together.ai',
+    requiresPackage: '@ai-sdk/togetherai',
     models: [
       {
         id: 'Salesforce/Llama-Rank-v1',
@@ -95,37 +101,14 @@ export const RERANK_PROVIDERS: RerankProviderInfo[] = [
 ]
 
 // =============================================================================
-// Provider Factory
-// =============================================================================
-
-/**
- * Cria o modelo de reranking apropriado baseado no provider configurado
- */
-async function getRerankModel(config: RerankConfig) {
-  switch (config.provider) {
-    case 'cohere': {
-      const { createCohere } = await import('@ai-sdk/cohere')
-      const cohere = createCohere({ apiKey: config.apiKey })
-      return cohere.rerank(config.model)
-    }
-
-    case 'together': {
-      const { createTogetherAI } = await import('@ai-sdk/togetherai')
-      const together = createTogetherAI({ apiKey: config.apiKey })
-      return together.rerank(config.model)
-    }
-
-    default:
-      throw new Error(`Unsupported rerank provider: ${config.provider}`)
-  }
-}
-
-// =============================================================================
 // Rerank Function
 // =============================================================================
 
 /**
  * Reordena documentos por relevância usando modelo de reranking
+ *
+ * NOTA: Esta função requer pacotes adicionais instalados.
+ * Se os pacotes não estiverem disponíveis, retorna os documentos na ordem original.
  *
  * @param query - Query do usuário
  * @param documents - Documentos retornados pela busca de similaridade
@@ -141,22 +124,78 @@ export async function rerankDocuments(
     return []
   }
 
-  const model = await getRerankModel(config)
   const topK = config.topK ?? 5
 
-  const { results } = await rerank({
-    model,
-    query,
-    documents: documents.map((d) => d.content),
-    topK: Math.min(topK, documents.length),
-  })
+  try {
+    // Dynamic import to check if reranking packages are available
+    const { rerank } = await import('ai')
 
-  // Mapeia resultados de volta com metadados originais
-  return results.map((r) => ({
-    content: r.document,
-    score: r.relevanceScore,
-    originalIndex: r.index,
-    metadata: documents[r.index]?.metadata,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let model: any
+
+    switch (config.provider) {
+      case 'cohere': {
+        try {
+          const { createCohere } = await import('@ai-sdk/cohere')
+          const cohere = createCohere({ apiKey: config.apiKey })
+          model = cohere.reranking(config.model)
+        } catch {
+          console.warn('[reranking] @ai-sdk/cohere não instalado, pulando reranking')
+          return fallbackToOriginalOrder(documents, topK)
+        }
+        break
+      }
+
+      case 'together': {
+        try {
+          const { createTogetherAI } = await import('@ai-sdk/togetherai')
+          const together = createTogetherAI({ apiKey: config.apiKey })
+          model = together.reranking(config.model)
+        } catch {
+          console.warn('[reranking] @ai-sdk/togetherai não instalado, pulando reranking')
+          return fallbackToOriginalOrder(documents, topK)
+        }
+        break
+      }
+
+      default:
+        console.warn(`[reranking] Provider "${config.provider}" não suportado`)
+        return fallbackToOriginalOrder(documents, topK)
+    }
+
+    const { ranking } = await rerank({
+      model,
+      documents: documents.map((d) => d.content),
+      query,
+      topN: Math.min(topK, documents.length),
+    })
+
+    // Mapeia resultados de volta com metadados originais
+    return ranking.map((r) => ({
+      content: r.document,
+      score: r.score,
+      originalIndex: r.originalIndex,
+      metadata: documents[r.originalIndex]?.metadata,
+    }))
+
+  } catch (err) {
+    console.error('[reranking] Erro ao fazer reranking:', err)
+    return fallbackToOriginalOrder(documents, topK)
+  }
+}
+
+/**
+ * Fallback: retorna documentos na ordem original quando reranking não está disponível
+ */
+function fallbackToOriginalOrder(
+  documents: Array<{ content: string; metadata?: Record<string, unknown> }>,
+  topK: number
+): RerankResult[] {
+  return documents.slice(0, topK).map((d, i) => ({
+    content: d.content,
+    score: 1 - (i * 0.1), // Score decrescente simulado
+    originalIndex: i,
+    metadata: d.metadata,
   }))
 }
 
@@ -197,7 +236,7 @@ export function validateRerankConfig(config: Partial<RerankConfig>): string | nu
  * Verifica se reranking está habilitado e configurado corretamente
  */
 export function isRerankEnabled(config: {
-  rerank_enabled?: boolean
+  rerank_enabled?: boolean | null
   rerank_provider?: string | null
   rerank_model?: string | null
 }): boolean {

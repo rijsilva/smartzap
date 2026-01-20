@@ -25,10 +25,21 @@ const createAgentSchema = z.object({
   model: z.string().default(DEFAULT_MODEL_ID),
   temperature: z.number().min(0).max(2).default(0.7),
   max_tokens: z.number().int().min(100).max(8192).default(1024),
-  file_search_store_id: z.string().nullable().optional(),
   is_active: z.boolean().default(true),
   is_default: z.boolean().default(false),
   debounce_ms: z.number().int().min(0).max(30000).default(5000),
+  // RAG: Embedding config
+  embedding_provider: z.enum(['google', 'openai', 'voyage', 'cohere']).default('google'),
+  embedding_model: z.string().default('gemini-embedding-001'),
+  embedding_dimensions: z.number().int().min(256).max(2000).default(768),
+  // RAG: Reranking config
+  rerank_enabled: z.boolean().default(false),
+  rerank_provider: z.enum(['cohere', 'together']).nullable().optional(),
+  rerank_model: z.string().nullable().optional(),
+  rerank_top_k: z.number().int().min(1).max(20).default(5),
+  // RAG: Search config
+  rag_similarity_threshold: z.number().min(0).max(1).default(0.5),
+  rag_max_results: z.number().int().min(1).max(20).default(5),
 })
 
 /**
@@ -101,10 +112,19 @@ export async function POST(request: NextRequest) {
         model: data.model,
         temperature: data.temperature,
         max_tokens: data.max_tokens,
-        file_search_store_id: data.file_search_store_id || null,
         is_active: data.is_active,
         is_default: data.is_default,
         debounce_ms: data.debounce_ms,
+        // RAG config
+        embedding_provider: data.embedding_provider,
+        embedding_model: data.embedding_model,
+        embedding_dimensions: data.embedding_dimensions,
+        rerank_enabled: data.rerank_enabled,
+        rerank_provider: data.rerank_provider || null,
+        rerank_model: data.rerank_model || null,
+        rerank_top_k: data.rerank_top_k,
+        rag_similarity_threshold: data.rag_similarity_threshold,
+        rag_max_results: data.rag_max_results,
       })
       .select()
       .single()

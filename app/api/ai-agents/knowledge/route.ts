@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { processDocumentOCR } from '@/lib/ai/ocr'
 import {
@@ -18,7 +19,7 @@ import {
   deleteFileEmbeddings,
   buildEmbeddingConfigFromAgent,
 } from '@/lib/ai/rag-store'
-import type { AIAgent } from '@/types'
+import type { AIAgent, EmbeddingProvider } from '@/types'
 
 // Helper to get admin client with null check
 function getClient() {
@@ -27,6 +28,34 @@ function getClient() {
     throw new Error('Supabase admin client not configured. Check SUPABASE_SECRET_KEY env var.')
   }
   return client
+}
+
+// Mapeamento de provider para chave de API na tabela settings
+const EMBEDDING_API_KEY_MAP: Record<EmbeddingProvider, { settingKey: string; envVar: string; label: string }> = {
+  google: { settingKey: 'gemini_api_key', envVar: 'GEMINI_API_KEY', label: 'Google Gemini' },
+  openai: { settingKey: 'openai_api_key', envVar: 'OPENAI_API_KEY', label: 'OpenAI' },
+  voyage: { settingKey: 'voyage_api_key', envVar: 'VOYAGE_API_KEY', label: 'Voyage AI' },
+  cohere: { settingKey: 'cohere_api_key', envVar: 'COHERE_API_KEY', label: 'Cohere' },
+}
+
+/**
+ * Busca a API key correta para o provider de embedding
+ */
+async function getEmbeddingApiKey(
+  supabase: SupabaseClient,
+  provider: EmbeddingProvider
+): Promise<{ apiKey: string | null; providerLabel: string }> {
+  const config = EMBEDDING_API_KEY_MAP[provider] || EMBEDDING_API_KEY_MAP.google
+
+  const { data: setting } = await supabase
+    .from('settings')
+    .select('value')
+    .eq('key', config.settingKey)
+    .maybeSingle()
+
+  const apiKey = setting?.value || process.env[config.envVar] || null
+
+  return { apiKey, providerLabel: config.label }
 }
 
 const uploadFileSchema = z.object({
@@ -130,19 +159,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get Gemini API key for embeddings
-    const { data: geminiSetting } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', 'gemini_api_key')
-      .maybeSingle()
-
-    const apiKey = geminiSetting?.value || process.env.GEMINI_API_KEY
+    // Get API key for the configured embedding provider
+    const embeddingProvider = (agent.embedding_provider || 'google') as EmbeddingProvider
+    const { apiKey, providerLabel } = await getEmbeddingApiKey(supabase, embeddingProvider)
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'API key do Gemini não configurada' },
-        { status: 500 }
+        { error: `API key do ${providerLabel} não configurada. Configure em Configurações > IA.` },
+        { status: 400 }
       )
     }
 

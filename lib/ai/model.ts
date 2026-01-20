@@ -51,7 +51,7 @@ export function getGeminiModel(modelId: string = 'gemini-2.5-flash') {
 
 /**
  * Default model for support agent
- * gemini-3-flash-preview is the latest and supports File Search natively
+ * gemini-3-flash-preview is the latest generation
  */
 export const DEFAULT_MODEL_ID = 'gemini-3-flash-preview'
 
@@ -59,16 +59,7 @@ export const DEFAULT_MODEL_ID = 'gemini-3-flash-preview'
  * Available models for AI agents
  * Organized by generation (newest first)
  *
- * File Search API compatible models (per Google docs - Jan 2026):
- * - gemini-3-pro-preview ✅
- * - gemini-3-flash-preview ✅
- * - gemini-2.5-pro ✅
- * - gemini-2.5-flash ✅
- * - gemini-2.5-flash-lite ✅
- *
- * NOT compatible with File Search:
- * - gemini-2.0-flash
- * - gemini-2.0-flash-lite
+ * Todos os modelos funcionam com RAG próprio (pgvector)
  */
 export const AI_AGENT_MODELS = [
   // Gemini 3 - Latest generation
@@ -77,14 +68,12 @@ export const AI_AGENT_MODELS = [
     name: 'Gemini 3 Flash',
     description: 'Mais recente, rápido e inteligente (recomendado)',
     generation: 3,
-    supportsFileSearch: true,
   },
   {
     id: 'gemini-3-pro-preview',
     name: 'Gemini 3 Pro',
     description: 'Máxima qualidade, melhor raciocínio',
     generation: 3,
-    supportsFileSearch: true,
   },
   // Gemini 2.5 - Current stable generation
   {
@@ -92,22 +81,19 @@ export const AI_AGENT_MODELS = [
     name: 'Gemini 2.5 Flash',
     description: 'Estável, rápido e eficiente',
     generation: 2.5,
-    supportsFileSearch: true,
   },
   {
     id: 'gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
     description: 'Alta qualidade, raciocínio avançado',
     generation: 2.5,
-    supportsFileSearch: true,
   },
   // Gemini 2.0 - Previous generation
   {
     id: 'gemini-2.0-flash',
     name: 'Gemini 2.0 Flash',
-    description: 'Geração anterior (SEM suporte a File Search)',
+    description: 'Geração anterior, rápido',
     generation: 2.0,
-    supportsFileSearch: false,
   },
 ] as const
 
@@ -121,14 +107,6 @@ export const SUPPORT_AGENT_MODELS = AI_AGENT_MODELS
  */
 export function getModelInfo(modelId: string) {
   return AI_AGENT_MODELS.find(m => m.id === modelId)
-}
-
-/**
- * Check if a model supports File Search
- */
-export function supportsFileSearch(modelId: string): boolean {
-  const model = getModelInfo(modelId)
-  return model?.supportsFileSearch ?? false
 }
 
 // =============================================================================

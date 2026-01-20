@@ -31,10 +31,12 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.9",
+    "@ai-sdk/cohere": "^3.0.8",
     "@ai-sdk/devtools": "^0.0.6",
     "@ai-sdk/google": "^3.0.10",
     "@ai-sdk/openai": "^3.0.7",
     "@ai-sdk/react": "^3.0.43",
+    "@ai-sdk/togetherai": "^2.0.15",
     "@codemirror/lang-javascript": "^6.2.4",
     "@codemirror/language": "^6.11.3",
     "@codemirror/state": "^6.5.2",

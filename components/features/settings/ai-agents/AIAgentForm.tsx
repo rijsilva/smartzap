@@ -5,8 +5,8 @@
  * Form with all agent configuration options
  */
 
-import React, { useState, useEffect } from 'react'
-import { Bot, Save, Loader2, Sparkles, SlidersHorizontal } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Bot, Save, Loader2, Sparkles, SlidersHorizontal, Database, Search, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,9 +28,16 @@ import {
   SheetTitle,
   SheetFooter,
 } from '@/components/ui/sheet'
-import type { AIAgent } from '@/types'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import type { AIAgent, EmbeddingProvider, RerankProvider } from '@/types'
 import type { CreateAIAgentParams, UpdateAIAgentParams } from '@/services/aiAgentService'
 import { AI_AGENT_MODELS, DEFAULT_MODEL_ID } from '@/lib/ai/model'
+import { EMBEDDING_PROVIDERS, DEFAULT_EMBEDDING_CONFIG } from '@/lib/ai/embeddings'
+import { RERANK_PROVIDERS } from '@/lib/ai/reranking'
 
 // Default system prompt template
 const DEFAULT_SYSTEM_PROMPT = `Você é um assistente virtual da empresa [NOME_EMPRESA].
@@ -74,6 +81,63 @@ export function AIAgentForm({
   const [isActive, setIsActive] = useState(true)
   const [isDefault, setIsDefault] = useState(false)
 
+  // RAG: Embedding config
+  const [embeddingProvider, setEmbeddingProvider] = useState<EmbeddingProvider>(DEFAULT_EMBEDDING_CONFIG.provider)
+  const [embeddingModel, setEmbeddingModel] = useState(DEFAULT_EMBEDDING_CONFIG.model)
+  const [embeddingDimensions, setEmbeddingDimensions] = useState(DEFAULT_EMBEDDING_CONFIG.dimensions)
+
+  // RAG: Search config
+  const [ragSimilarityThreshold, setRagSimilarityThreshold] = useState(0.5)
+  const [ragMaxResults, setRagMaxResults] = useState(5)
+
+  // RAG: Reranking config
+  const [rerankEnabled, setRerankEnabled] = useState(false)
+  const [rerankProvider, setRerankProvider] = useState<RerankProvider | null>(null)
+  const [rerankModel, setRerankModel] = useState<string | null>(null)
+  const [rerankTopK, setRerankTopK] = useState(5)
+
+  // RAG config expanded state
+  const [ragConfigOpen, setRagConfigOpen] = useState(false)
+
+  // Available embedding providers (fetched from API)
+  interface ProviderAvailability {
+    id: EmbeddingProvider
+    name: string
+    available: boolean
+    reason: string | null
+    models: Array<{
+      id: string
+      name: string
+      dimensions: number
+      pricePerMillion: number
+    }>
+  }
+  const [availableProviders, setAvailableProviders] = useState<ProviderAvailability[]>([])
+  const [providersLoading, setProvidersLoading] = useState(false)
+
+  // Fetch available embedding providers
+  const fetchAvailableProviders = useCallback(async () => {
+    setProvidersLoading(true)
+    try {
+      const res = await fetch('/api/ai-agents/embedding-providers')
+      if (res.ok) {
+        const data = await res.json()
+        setAvailableProviders(data.providers || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch embedding providers:', error)
+    } finally {
+      setProvidersLoading(false)
+    }
+  }, [])
+
+  // Fetch providers when sheet opens
+  useEffect(() => {
+    if (open) {
+      fetchAvailableProviders()
+    }
+  }, [open, fetchAvailableProviders])
+
   // Reset form when agent changes
   useEffect(() => {
     if (agent) {
@@ -85,6 +149,17 @@ export function AIAgentForm({
       setDebounceMs(agent.debounce_ms)
       setIsActive(agent.is_active)
       setIsDefault(agent.is_default)
+      // RAG config
+      setEmbeddingProvider(agent.embedding_provider || DEFAULT_EMBEDDING_CONFIG.provider)
+      setEmbeddingModel(agent.embedding_model || DEFAULT_EMBEDDING_CONFIG.model)
+      setEmbeddingDimensions(agent.embedding_dimensions || DEFAULT_EMBEDDING_CONFIG.dimensions)
+      setRagSimilarityThreshold(agent.rag_similarity_threshold || 0.5)
+      setRagMaxResults(agent.rag_max_results || 5)
+      // Reranking config
+      setRerankEnabled(agent.rerank_enabled || false)
+      setRerankProvider(agent.rerank_provider || null)
+      setRerankModel(agent.rerank_model || null)
+      setRerankTopK(agent.rerank_top_k || 5)
     } else {
       // Reset to defaults for new agent
       setName('')
@@ -95,6 +170,17 @@ export function AIAgentForm({
       setDebounceMs(5000)
       setIsActive(true)
       setIsDefault(false)
+      // RAG config defaults
+      setEmbeddingProvider(DEFAULT_EMBEDDING_CONFIG.provider)
+      setEmbeddingModel(DEFAULT_EMBEDDING_CONFIG.model)
+      setEmbeddingDimensions(DEFAULT_EMBEDDING_CONFIG.dimensions)
+      setRagSimilarityThreshold(0.5)
+      setRagMaxResults(5)
+      // Reranking defaults
+      setRerankEnabled(false)
+      setRerankProvider(null)
+      setRerankModel(null)
+      setRerankTopK(5)
     }
   }, [agent, open])
 
@@ -110,9 +196,65 @@ export function AIAgentForm({
       debounce_ms: debounceMs,
       is_active: isActive,
       is_default: isDefault,
+      // RAG config
+      embedding_provider: embeddingProvider,
+      embedding_model: embeddingModel,
+      embedding_dimensions: embeddingDimensions,
+      rag_similarity_threshold: ragSimilarityThreshold,
+      rag_max_results: ragMaxResults,
+      // Reranking config
+      rerank_enabled: rerankEnabled,
+      rerank_provider: rerankEnabled ? rerankProvider : null,
+      rerank_model: rerankEnabled ? rerankModel : null,
+      rerank_top_k: rerankTopK,
     }
 
     await onSubmit(params)
+  }
+
+  // Get models for selected embedding provider
+  const availableEmbeddingModels = EMBEDDING_PROVIDERS.find(p => p.id === embeddingProvider)?.models || []
+
+  // Handle provider change - auto-select first model and update dimensions
+  const handleEmbeddingProviderChange = (provider: EmbeddingProvider) => {
+    setEmbeddingProvider(provider)
+    const providerInfo = EMBEDDING_PROVIDERS.find(p => p.id === provider)
+    if (providerInfo && providerInfo.models.length > 0) {
+      setEmbeddingModel(providerInfo.models[0].id)
+      setEmbeddingDimensions(providerInfo.models[0].dimensions)
+    }
+  }
+
+  // Handle model change - auto-update dimensions
+  const handleEmbeddingModelChange = (modelId: string) => {
+    setEmbeddingModel(modelId)
+    const modelInfo = availableEmbeddingModels.find(m => m.id === modelId)
+    if (modelInfo) {
+      setEmbeddingDimensions(modelInfo.dimensions)
+    }
+  }
+
+  // Get models for selected reranking provider
+  const availableRerankModels = rerankProvider
+    ? RERANK_PROVIDERS.find(p => p.id === rerankProvider)?.models || []
+    : []
+
+  // Handle rerank provider change - auto-select first model
+  const handleRerankProviderChange = (provider: RerankProvider) => {
+    setRerankProvider(provider)
+    const providerInfo = RERANK_PROVIDERS.find(p => p.id === provider)
+    if (providerInfo && providerInfo.models.length > 0) {
+      setRerankModel(providerInfo.models[0].id)
+    }
+  }
+
+  // Handle rerank toggle
+  const handleRerankToggle = (enabled: boolean) => {
+    setRerankEnabled(enabled)
+    if (enabled && !rerankProvider) {
+      // Auto-select Cohere as default provider
+      handleRerankProviderChange('cohere')
+    }
   }
 
   // Get selected model info
@@ -280,6 +422,249 @@ export function AIAgentForm({
                 </p>
               </div>
             </div>
+
+            {/* ═══════════════════════════════════════════════════════════════
+                SEÇÃO: Configuração RAG (Knowledge Base)
+            ═══════════════════════════════════════════════════════════════ */}
+            <Collapsible open={ragConfigOpen} onOpenChange={setRagConfigOpen}>
+              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] px-4 py-3 text-left transition-colors hover:bg-[var(--ds-bg-surface)]">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-primary-400" />
+                  <div>
+                    <span className="text-sm font-medium">Configuração RAG</span>
+                    <p className="text-xs text-[var(--ds-text-muted)]">
+                      {embeddingProvider === 'google' ? 'Google Gemini' : 'OpenAI'} • {embeddingDimensions} dimensões
+                    </p>
+                  </div>
+                </div>
+                <Search className={`h-4 w-4 text-[var(--ds-text-muted)] transition-transform ${ragConfigOpen ? 'rotate-90' : ''}`} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 space-y-4 rounded-lg border border-[var(--ds-border-default)] bg-[var(--ds-bg-elevated)] p-4">
+                {/* Embedding Provider */}
+                <div className="space-y-2">
+                  <Label htmlFor="embeddingProvider" className="text-sm">
+                    Provider de Embedding
+                  </Label>
+                  <Select
+                    value={embeddingProvider}
+                    onValueChange={(v) => handleEmbeddingProviderChange(v as EmbeddingProvider)}
+                    disabled={providersLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={providersLoading ? "Carregando..." : "Selecione um provider"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(availableProviders.length > 0 ? availableProviders : EMBEDDING_PROVIDERS).map((p) => {
+                        const isAvailable = 'available' in p ? p.available : true
+                        return (
+                          <SelectItem
+                            key={p.id}
+                            value={p.id}
+                            disabled={!isAvailable}
+                            className={!isAvailable ? 'opacity-50' : ''}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span>{p.name}</span>
+                              {!isAvailable && (
+                                <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                                  <AlertCircle className="h-3 w-3" />
+                                  Sem API key
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {/* Warning if selected provider is not available */}
+                  {availableProviders.length > 0 && !availableProviders.find(p => p.id === embeddingProvider)?.available && (
+                    <div className="flex items-center gap-2 rounded-md bg-amber-500/10 p-2 text-xs text-amber-400">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <span>API key do {EMBEDDING_PROVIDERS.find(p => p.id === embeddingProvider)?.name} não configurada. Configure em Configurações → IA.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Embedding Model */}
+                <div className="space-y-2">
+                  <Label htmlFor="embeddingModel" className="text-sm">
+                    Modelo de Embedding
+                  </Label>
+                  <Select
+                    value={embeddingModel}
+                    onValueChange={handleEmbeddingModelChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableEmbeddingModels.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{m.name}</span>
+                            <span className="text-[10px] text-[var(--ds-text-muted)]">
+                              {m.dimensions}d • ${m.pricePerMillion}/1M
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-[var(--ds-text-muted)]">
+                    Dimensões: {embeddingDimensions} • Custo por 1M tokens
+                  </p>
+                </div>
+
+                {/* Similarity Threshold */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Threshold de Similaridade</Label>
+                    <span className="rounded bg-[var(--ds-bg-surface)] px-2 py-0.5 text-xs font-mono text-[var(--ds-text-secondary)]">
+                      {ragSimilarityThreshold.toFixed(2)}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[ragSimilarityThreshold]}
+                    onValueChange={([v]) => setRagSimilarityThreshold(v)}
+                    min={0.1}
+                    max={0.95}
+                    step={0.05}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-[10px] text-[var(--ds-text-muted)]">
+                    <span>Mais resultados</span>
+                    <span>Mais precisão</span>
+                  </div>
+                </div>
+
+                {/* Max Results */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Máximo de Resultados</Label>
+                    <span className="rounded bg-[var(--ds-bg-surface)] px-2 py-0.5 text-xs font-mono text-[var(--ds-text-secondary)]">
+                      {ragMaxResults}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[ragMaxResults]}
+                    onValueChange={([v]) => setRagMaxResults(v)}
+                    min={1}
+                    max={15}
+                    step={1}
+                    className="w-full"
+                  />
+                  <p className="text-[10px] text-[var(--ds-text-muted)]">
+                    Quantidade de chunks retornados da knowledge base
+                  </p>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-[var(--ds-border-default)]" />
+
+                {/* Reranking Toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="rerankEnabled" className="text-sm">
+                      Reranking (Avançado)
+                    </Label>
+                    <p className="text-[10px] text-[var(--ds-text-muted)]">
+                      Melhora precisão em bases grandes (+200-500ms latência)
+                    </p>
+                  </div>
+                  <Switch
+                    id="rerankEnabled"
+                    checked={rerankEnabled}
+                    onCheckedChange={handleRerankToggle}
+                  />
+                </div>
+
+                {/* Reranking Config (when enabled) */}
+                {rerankEnabled && (
+                  <div className="space-y-4 rounded-md border border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)] p-3">
+                    {/* Rerank Provider */}
+                    <div className="space-y-2">
+                      <Label className="text-sm">Provider de Reranking</Label>
+                      <Select
+                        value={rerankProvider || ''}
+                        onValueChange={(v) => handleRerankProviderChange(v as RerankProvider)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RERANK_PROVIDERS.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Rerank Model */}
+                    {rerankProvider && (
+                      <div className="space-y-2">
+                        <Label className="text-sm">Modelo de Reranking</Label>
+                        <Select
+                          value={rerankModel || ''}
+                          onValueChange={setRerankModel}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione um modelo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableRerankModels.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                <div className="flex flex-col">
+                                  <span>{m.name}</span>
+                                  <span className="text-[10px] text-[var(--ds-text-muted)]">
+                                    {m.description}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Top K */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Top K</Label>
+                        <span className="rounded bg-[var(--ds-bg-elevated)] px-2 py-0.5 text-xs font-mono text-[var(--ds-text-secondary)]">
+                          {rerankTopK}
+                        </span>
+                      </div>
+                      <Slider
+                        value={[rerankTopK]}
+                        onValueChange={([v]) => setRerankTopK(v)}
+                        min={1}
+                        max={10}
+                        step={1}
+                        className="w-full"
+                      />
+                      <p className="text-[10px] text-[var(--ds-text-muted)]">
+                        Retorna os K melhores resultados após reranking
+                      </p>
+                    </div>
+
+                    {/* API Key reminder */}
+                    <div className="rounded-md bg-blue-500/10 p-2 text-[10px] text-blue-400">
+                      Configure a API key do {rerankProvider === 'cohere' ? 'Cohere' : 'Together.ai'} nas
+                      configurações para usar reranking.
+                    </div>
+                  </div>
+                )}
+
+                {/* Warning about re-indexing */}
+                <div className="rounded-md bg-amber-500/10 p-3 text-xs text-amber-400">
+                  <strong>Atenção:</strong> Trocar o provider ou modelo de embedding requer
+                  re-indexar todos os arquivos da knowledge base.
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             {/* ═══════════════════════════════════════════════════════════════
                 SEÇÃO: Status

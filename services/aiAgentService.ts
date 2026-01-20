@@ -9,16 +9,29 @@ import type { AIAgent } from '@/types'
 // Types
 // =============================================================================
 
+import type { EmbeddingProvider, RerankProvider } from '@/types'
+
 export interface CreateAIAgentParams {
   name: string
   system_prompt: string
   model?: string
   temperature?: number
   max_tokens?: number
-  file_search_store_id?: string | null
   is_active?: boolean
   is_default?: boolean
   debounce_ms?: number
+  // RAG: Embedding config
+  embedding_provider?: EmbeddingProvider
+  embedding_model?: string
+  embedding_dimensions?: number
+  // RAG: Reranking config
+  rerank_enabled?: boolean
+  rerank_provider?: RerankProvider | null
+  rerank_model?: string | null
+  rerank_top_k?: number
+  // RAG: Search config
+  rag_similarity_threshold?: number
+  rag_max_results?: number
 }
 
 export interface UpdateAIAgentParams {
@@ -27,10 +40,21 @@ export interface UpdateAIAgentParams {
   model?: string
   temperature?: number
   max_tokens?: number
-  file_search_store_id?: string | null
   is_active?: boolean
   is_default?: boolean
   debounce_ms?: number
+  // RAG: Embedding config
+  embedding_provider?: EmbeddingProvider
+  embedding_model?: string
+  embedding_dimensions?: number
+  // RAG: Reranking config
+  rerank_enabled?: boolean
+  rerank_provider?: RerankProvider | null
+  rerank_model?: string | null
+  rerank_top_k?: number
+  // RAG: Search config
+  rag_similarity_threshold?: number
+  rag_max_results?: number
 }
 
 // =============================================================================

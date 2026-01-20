@@ -3,13 +3,27 @@
  * Allows testing an agent with a sample message before activation
  *
  * Uses streamText + tools for structured output (AI SDK v6 pattern)
- * Also supports Google File Search Tool for RAG when configured
+ * Supports RAG with pgvector for knowledge base search
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { z } from 'zod'
 import { DEFAULT_MODEL_ID } from '@/lib/ai/model'
+import {
+  findRelevantContent,
+  buildEmbeddingConfigFromAgent,
+  hasIndexedContent,
+} from '@/lib/ai/rag-store'
+import type { AIAgent, EmbeddingProvider } from '@/types'
+
+// Mapeamento de provider para chave de API na tabela settings
+const EMBEDDING_API_KEY_MAP: Record<EmbeddingProvider, { settingKey: string; envVar: string }> = {
+  google: { settingKey: 'gemini_api_key', envVar: 'GEMINI_API_KEY' },
+  openai: { settingKey: 'openai_api_key', envVar: 'OPENAI_API_KEY' },
+  voyage: { settingKey: 'voyage_api_key', envVar: 'VOYAGE_API_KEY' },
+  cohere: { settingKey: 'cohere_api_key', envVar: 'COHERE_API_KEY' },
+}
 
 // =============================================================================
 // Response Schema (same as support-agent-v2)
@@ -79,7 +93,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const { message } = parsed.data
 
-    // Get agent with file_search_store_id
+    // Get agent configuration
     const { data: agent, error: agentError } = await supabase
       .from('ai_agents')
       .select('*')
@@ -93,7 +107,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       )
     }
 
-    console.log(`[ai-agents/test] Agent: ${agent.name}, file_search_store_id: ${agent.file_search_store_id}`)
+    console.log(`[ai-agents/test] Agent: ${agent.name}, embedding_provider: ${agent.embedding_provider}`)
+
+    // Check if agent has indexed content in pgvector
+    const hasKnowledgeBase = await hasIndexedContent(id)
 
     // Get count of indexed files for this agent
     const { count: indexedFilesCount } = await supabase
@@ -102,7 +119,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .eq('agent_id', id)
       .eq('indexing_status', 'completed')
 
-    console.log(`[ai-agents/test] Indexed files count: ${indexedFilesCount}`)
+    console.log(`[ai-agents/test] hasKnowledgeBase: ${hasKnowledgeBase}, indexed files: ${indexedFilesCount}`)
 
     // Import AI dependencies dynamically
     const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
@@ -139,74 +156,101 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Generate response
     const startTime = Date.now()
 
-    // Check if agent has knowledge base
-    const hasFileSearch = !!agent.file_search_store_id
-
     // Capture structured response from tool
     let structuredResponse: TestResponse | undefined
+    let ragContext: string | null = null
+    let ragSources: Array<{ title: string; content: string }> = []
 
-    console.log(`[ai-agents/test] hasFileSearch: ${hasFileSearch}, store: ${agent.file_search_store_id}`)
+    console.log(`[ai-agents/test] hasKnowledgeBase: ${hasKnowledgeBase}`)
 
-    if (hasFileSearch && agent.file_search_store_id) {
-      // WITH KNOWLEDGE BASE: Use file_search (returns plain text with auto-injected context)
-      console.log(`[ai-agents/test] Using File Search with store: ${agent.file_search_store_id}`)
+    // If agent has knowledge base, search for relevant content
+    if (hasKnowledgeBase) {
+      try {
+        // Get embedding API key for the configured provider
+        const embeddingProvider = (agent.embedding_provider || 'google') as EmbeddingProvider
+        const config = EMBEDDING_API_KEY_MAP[embeddingProvider]
 
-      const { generateText } = await import('ai')
+        const { data: embeddingKeySetting } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', config.settingKey)
+          .maybeSingle()
 
-      const result = await generateText({
-        model,
-        system: systemPrompt,
-        prompt: message,
-        tools: {
-          file_search: google.tools.fileSearch({
-            fileSearchStoreNames: [agent.file_search_store_id],
-            topK: 5,
-          }),
-        },
-        temperature: agent.temperature ?? 0.7,
-        maxOutputTokens: agent.max_tokens ?? 1024,
-      })
+        const embeddingApiKey = embeddingKeySetting?.value || process.env[config.envVar]
 
-      // Create structured response from plain text
-      structuredResponse = {
-        message: result.text || 'Desculpe, não consegui gerar uma resposta.',
-        sentiment: 'neutral',
-        confidence: 0.8,
-        shouldHandoff: false,
+        if (embeddingApiKey) {
+          console.log(`[ai-agents/test] Searching knowledge base with ${embeddingProvider}`)
+
+          const embeddingConfig = buildEmbeddingConfigFromAgent(agent as AIAgent, embeddingApiKey)
+
+          const relevantContent = await findRelevantContent({
+            agentId: id,
+            query: message,
+            embeddingConfig,
+            topK: agent.rag_max_results || 5,
+            threshold: agent.rag_similarity_threshold || 0.5,
+          })
+
+          if (relevantContent.length > 0) {
+            console.log(`[ai-agents/test] Found ${relevantContent.length} relevant chunks`)
+
+            // Build context string
+            ragContext = relevantContent
+              .map((r, i) => `[${i + 1}] ${r.content}`)
+              .join('\n\n')
+
+            // Build sources for response
+            ragSources = relevantContent.map((r, i) => ({
+              title: `Trecho ${i + 1} (${(r.similarity * 100).toFixed(0)}% relevante)`,
+              content: r.content.slice(0, 200) + (r.content.length > 200 ? '...' : ''),
+            }))
+          } else {
+            console.log(`[ai-agents/test] No relevant content found above threshold`)
+          }
+        } else {
+          console.log(`[ai-agents/test] Embedding API key not configured for ${embeddingProvider}`)
+        }
+      } catch (ragError) {
+        console.error(`[ai-agents/test] RAG search error:`, ragError)
+        // Continue without RAG context
       }
+    }
 
-      console.log(`[ai-agents/test] File Search response: ${structuredResponse.message.slice(0, 100)}...`)
+    // Build final system prompt with RAG context
+    const finalSystemPrompt = ragContext
+      ? `${systemPrompt}\n\n---\nCONTEXTO DA BASE DE CONHECIMENTO:\n${ragContext}\n---\n\nUse as informações acima para responder à pergunta do usuário. Se a informação não estiver no contexto, diga que não tem essa informação disponível.`
+      : systemPrompt
 
-    } else {
-      // WITHOUT KNOWLEDGE BASE: Use respond tool for structured output
-      console.log(`[ai-agents/test] Using respond tool (no knowledge base)`)
+    console.log(`[ai-agents/test] Using ${ragContext ? 'RAG-enhanced' : 'standard'} prompt`)
 
-      // Define the respond tool
-      const respondTool = tool({
-        description: 'Envia uma resposta estruturada ao usuário.',
-        inputSchema: testResponseSchema,
-        execute: async (params) => {
-          structuredResponse = params
-          return params
-        },
-      })
+    // Define the respond tool
+    const respondTool = tool({
+      description: 'Envia uma resposta estruturada ao usuário.',
+      inputSchema: testResponseSchema,
+      execute: async (params) => {
+        structuredResponse = {
+          ...params,
+          sources: ragSources.length > 0 ? ragSources : params.sources,
+        }
+        return structuredResponse
+      },
+    })
 
-      const result = streamText({
-        model,
-        system: systemPrompt,
-        prompt: message,
-        temperature: agent.temperature ?? 0.7,
-        maxOutputTokens: agent.max_tokens ?? 1024,
-        tools: {
-          respond: respondTool,
-        },
-        toolChoice: 'required',
-      })
+    const result = streamText({
+      model,
+      system: finalSystemPrompt,
+      prompt: message,
+      temperature: agent.temperature ?? 0.7,
+      maxOutputTokens: agent.max_tokens ?? 1024,
+      tools: {
+        respond: respondTool,
+      },
+      toolChoice: 'required',
+    })
 
-      // Consume the stream completely to trigger tool execution
-      for await (const _part of result.fullStream) {
-        // Just consume - the tool execute function captures the response
-      }
+    // Consume the stream completely to trigger tool execution
+    for await (const _part of result.fullStream) {
+      // Just consume - the tool execute function captures the response
     }
 
     const latencyMs = Date.now() - startTime
@@ -216,14 +260,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
       throw new Error('No structured response generated from AI')
     }
 
-    console.log(`[ai-agents/test] Response generated in ${latencyMs}ms. Used File Search: ${hasFileSearch}`)
+    console.log(`[ai-agents/test] Response generated in ${latencyMs}ms. Used RAG: ${!!ragContext}`)
 
     return NextResponse.json({
       response: structuredResponse.message,
       latency_ms: latencyMs,
       model: modelId,
       knowledge_files_used: indexedFilesCount ?? 0,
-      file_search_enabled: hasFileSearch,
+      rag_enabled: hasKnowledgeBase,
+      rag_chunks_used: ragSources.length,
       // Structured output fields
       sentiment: structuredResponse.sentiment,
       confidence: structuredResponse.confidence,

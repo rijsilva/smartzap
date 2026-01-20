@@ -5,6 +5,12 @@
 -- =============================================================================
 
 -- =============================================================================
+-- PARTE 0: EXTENSÕES
+-- =============================================================================
+
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- =============================================================================
 -- PARTE 1: FUNCTIONS
 -- =============================================================================
 
@@ -546,13 +552,27 @@ CREATE TABLE IF NOT EXISTS ai_agents (
   model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
   temperature REAL NOT NULL DEFAULT 0.7,
   max_tokens INTEGER NOT NULL DEFAULT 1024,
-  file_search_store_id TEXT,
+  -- RAG: Configuração de embeddings (substituiu file_search_store_id)
+  embedding_provider TEXT DEFAULT 'google',
+  embedding_model TEXT DEFAULT 'gemini-embedding-001',
+  embedding_dimensions INTEGER DEFAULT 768,
+  -- RAG: Configuração de reranking
+  rerank_enabled BOOLEAN DEFAULT false,
+  rerank_provider TEXT,
+  rerank_model TEXT,
+  rerank_top_k INTEGER DEFAULT 5,
+  -- RAG: Configuração de busca
+  rag_similarity_threshold REAL DEFAULT 0.5,
+  rag_max_results INTEGER DEFAULT 5,
+  -- Outros
   is_active BOOLEAN NOT NULL DEFAULT true,
   is_default BOOLEAN NOT NULL DEFAULT false,
   debounce_ms INTEGER NOT NULL DEFAULT 5000,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+COMMENT ON TABLE ai_agents IS 'AI agents configuration. RAG uses pgvector (ai_embeddings table) instead of Google File Search.';
 
 -- inbox_conversations: contact_id FK adicionada no final como ALTER TABLE
 -- NOTA: contact_id é TEXT porque contacts.id usa prefixo 'ct_' + uuid (não UUID puro)
@@ -642,9 +662,25 @@ CREATE TABLE IF NOT EXISTS ai_knowledge_files (
   external_file_id TEXT,
   external_file_uri TEXT,
   indexing_status TEXT NOT NULL DEFAULT 'pending',
+  chunks_count INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Tabela de embeddings para RAG com pgvector
+CREATE TABLE IF NOT EXISTS ai_embeddings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL,
+  file_id UUID,
+  content TEXT NOT NULL,
+  embedding VECTOR(768) NOT NULL,
+  dimensions INTEGER NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE ai_embeddings IS 'Armazena embeddings vetoriais para RAG (Retrieval-Augmented Generation)';
+COMMENT ON COLUMN ai_embeddings.embedding IS 'Vetor de embedding (768 dimensões - Google Gemini)';
 
 -- =============================================================================
 -- PARTE 4: TABLES (campaign folders/tags - feature 004)
@@ -811,6 +847,12 @@ CREATE INDEX IF NOT EXISTS idx_ai_knowledge_files_agent_id ON ai_knowledge_files
 CREATE INDEX IF NOT EXISTS idx_ai_knowledge_files_created_at ON ai_knowledge_files(created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_agents_single_default ON ai_agents (is_default) WHERE is_default = true;
 
+-- Indexes ai_embeddings (RAG)
+CREATE INDEX IF NOT EXISTS ai_embeddings_embedding_idx ON ai_embeddings USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS ai_embeddings_agent_id_idx ON ai_embeddings(agent_id);
+CREATE INDEX IF NOT EXISTS ai_embeddings_file_id_idx ON ai_embeddings(file_id);
+CREATE INDEX IF NOT EXISTS ai_embeddings_agent_dimensions_idx ON ai_embeddings(agent_id, dimensions);
+
 -- Indexes campaign folders/tags
 CREATE INDEX IF NOT EXISTS idx_campaign_tag_assignments_campaign ON campaign_tag_assignments(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_tag_assignments_tag ON campaign_tag_assignments(tag_id);
@@ -866,6 +908,10 @@ ALTER TABLE ONLY ai_agent_logs ADD CONSTRAINT ai_agent_logs_conversation_id_fkey
 ALTER TABLE ONLY inbox_conversation_labels ADD CONSTRAINT inbox_conversation_labels_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES inbox_conversations(id) ON DELETE CASCADE;
 ALTER TABLE ONLY inbox_conversation_labels ADD CONSTRAINT inbox_conversation_labels_label_id_fkey FOREIGN KEY (label_id) REFERENCES inbox_labels(id) ON DELETE CASCADE;
 ALTER TABLE ONLY ai_knowledge_files ADD CONSTRAINT ai_knowledge_files_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES ai_agents(id) ON DELETE CASCADE;
+
+-- AI Embeddings FKs
+ALTER TABLE ONLY ai_embeddings ADD CONSTRAINT ai_embeddings_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES ai_agents(id) ON DELETE CASCADE;
+ALTER TABLE ONLY ai_embeddings ADD CONSTRAINT ai_embeddings_file_id_fkey FOREIGN KEY (file_id) REFERENCES ai_knowledge_files(id) ON DELETE CASCADE;
 
 -- Campaign tags FKs
 ALTER TABLE ONLY campaign_tag_assignments ADD CONSTRAINT campaign_tag_assignments_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE;
@@ -943,6 +989,13 @@ CREATE POLICY "ai_knowledge_files_insert_authenticated" ON ai_knowledge_files FO
 CREATE POLICY "ai_knowledge_files_update_authenticated" ON ai_knowledge_files FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "ai_knowledge_files_delete_authenticated" ON ai_knowledge_files FOR DELETE TO authenticated USING (true);
 
+-- RLS ai_embeddings
+ALTER TABLE ai_embeddings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "ai_embeddings_select_authenticated" ON ai_embeddings FOR SELECT TO authenticated USING (true);
+CREATE POLICY "ai_embeddings_insert_authenticated" ON ai_embeddings FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "ai_embeddings_update_authenticated" ON ai_embeddings FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "ai_embeddings_delete_authenticated" ON ai_embeddings FOR DELETE TO authenticated USING (true);
+
 -- Campaign Folders
 ALTER TABLE campaign_folders ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "campaign_folders_select" ON campaign_folders FOR SELECT TO authenticated USING (true);
@@ -986,6 +1039,43 @@ CREATE POLICY "wa_template_media_service_upload" ON storage.objects FOR INSERT W
 
 DROP POLICY IF EXISTS "wa_template_media_service_delete" ON storage.objects;
 CREATE POLICY "wa_template_media_service_delete" ON storage.objects FOR DELETE USING (bucket_id = 'wa-template-media');
+
+-- =============================================================================
+-- PARTE 14: FUNÇÕES RAG (pgvector)
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION search_embeddings(
+  query_embedding VECTOR(768),
+  agent_id_filter UUID,
+  expected_dimensions INTEGER,
+  match_threshold FLOAT DEFAULT 0.5,
+  match_count INT DEFAULT 5
+)
+RETURNS TABLE (
+  id UUID,
+  content TEXT,
+  similarity FLOAT,
+  metadata JSONB
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    e.id,
+    e.content,
+    (1 - (e.embedding <=> query_embedding))::FLOAT AS similarity,
+    e.metadata
+  FROM ai_embeddings e
+  WHERE e.agent_id = agent_id_filter
+    AND e.dimensions = expected_dimensions
+    AND (1 - (e.embedding <=> query_embedding)) > match_threshold
+  ORDER BY e.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+COMMENT ON FUNCTION search_embeddings IS 'Busca embeddings similares usando distância de cosseno. Retorna apenas vetores com dimensões compatíveis.';
 
 -- =============================================================================
 -- FIM DO SCHEMA

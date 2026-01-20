@@ -8,7 +8,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { deleteFileSearchStore } from '@/lib/ai/file-search-store'
 
 // Helper to get admin client with null check
 function getClient() {
@@ -26,10 +25,21 @@ const updateAgentSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().min(100).max(8192).optional(),
-  file_search_store_id: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
   is_default: z.boolean().optional(),
   debounce_ms: z.number().int().min(0).max(30000).optional(),
+  // RAG: Embedding config
+  embedding_provider: z.enum(['google', 'openai', 'voyage', 'cohere']).optional(),
+  embedding_model: z.string().optional(),
+  embedding_dimensions: z.number().int().min(256).max(2000).optional(),
+  // RAG: Reranking config
+  rerank_enabled: z.boolean().optional(),
+  rerank_provider: z.enum(['cohere', 'together']).nullable().optional(),
+  rerank_model: z.string().nullable().optional(),
+  rerank_top_k: z.number().int().min(1).max(20).optional(),
+  // RAG: Search config
+  rag_similarity_threshold: z.number().min(0).max(1).optional(),
+  rag_max_results: z.number().int().min(1).max(20).optional(),
 })
 
 /**
@@ -158,7 +168,7 @@ export async function DELETE(
     // Check if agent exists and if it's the default
     const { data: existing, error: fetchError } = await supabase
       .from('ai_agents')
-      .select('id, is_default, name, file_search_store_id')
+      .select('id, is_default, name')
       .eq('id', id)
       .single()
 
@@ -202,28 +212,6 @@ export async function DELETE(
       }
 
       console.log(`[AI Agents] Switched ${assignedCount} conversations to human mode before deleting agent ${existing.name}`)
-    }
-
-    // Delete File Search Store if exists (cleanup orphaned stores)
-    if (existing.file_search_store_id) {
-      try {
-        // Get Gemini API key
-        const { data: geminiSetting } = await supabase
-          .from('settings')
-          .select('value')
-          .eq('key', 'gemini_api_key')
-          .maybeSingle()
-
-        const apiKey = geminiSetting?.value || process.env.GEMINI_API_KEY
-
-        if (apiKey) {
-          await deleteFileSearchStore(apiKey, existing.file_search_store_id)
-          console.log(`[AI Agents] Deleted File Search Store: ${existing.file_search_store_id}`)
-        }
-      } catch (storeError) {
-        // Don't block agent deletion if store deletion fails
-        console.error('[AI Agents] Failed to delete File Search Store (continuing):', storeError)
-      }
     }
 
     // Delete agent

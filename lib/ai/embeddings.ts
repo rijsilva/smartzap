@@ -9,7 +9,6 @@
  */
 
 import { embed, embedMany } from 'ai'
-import type { EmbeddingModel } from 'ai'
 
 // =============================================================================
 // Types
@@ -40,10 +39,21 @@ export interface EmbeddingProviderInfo {
 // Provider Configurations (para UI)
 // =============================================================================
 
+/**
+ * Providers de embedding disponíveis.
+ *
+ * IMPORTANTE: A coluna pgvector está configurada para 768 dimensões.
+ * Todos os modelos abaixo estão configurados para gerar 768 dimensões.
+ *
+ * - Google Gemini: 768 é nativo
+ * - OpenAI text-embedding-3: Suporta dimensões customizadas via API (reduzido de 1536 para 768)
+ *
+ * Isso permite trocar de provider SEM precisar re-indexar documentos!
+ */
 export const EMBEDDING_PROVIDERS: EmbeddingProviderInfo[] = [
   {
     id: 'google',
-    name: 'Google',
+    name: 'Google (Recomendado)',
     models: [
       { id: 'gemini-embedding-001', name: 'Gemini Embedding 001', dimensions: 768, pricePerMillion: 0.025 },
       { id: 'text-embedding-004', name: 'Text Embedding 004', dimensions: 768, pricePerMillion: 0.025 },
@@ -53,24 +63,10 @@ export const EMBEDDING_PROVIDERS: EmbeddingProviderInfo[] = [
     id: 'openai',
     name: 'OpenAI',
     models: [
-      { id: 'text-embedding-3-large', name: 'Text Embedding 3 Large', dimensions: 3072, pricePerMillion: 0.13 },
-      { id: 'text-embedding-3-small', name: 'Text Embedding 3 Small', dimensions: 1536, pricePerMillion: 0.02 },
-    ],
-  },
-  {
-    id: 'voyage',
-    name: 'Voyage AI',
-    models: [
-      { id: 'voyage-3.5', name: 'Voyage 3.5', dimensions: 1024, pricePerMillion: 0.06 },
-      { id: 'voyage-3.5-lite', name: 'Voyage 3.5 Lite', dimensions: 512, pricePerMillion: 0.02 },
-    ],
-  },
-  {
-    id: 'cohere',
-    name: 'Cohere',
-    models: [
-      { id: 'embed-multilingual-v3.0', name: 'Embed Multilingual v3', dimensions: 1024, pricePerMillion: 0.1 },
-      { id: 'embed-english-v3.0', name: 'Embed English v3', dimensions: 1024, pricePerMillion: 0.1 },
+      // OpenAI text-embedding-3 suporta dimensões customizadas via API
+      // Usamos 768 para compatibilidade com a coluna pgvector
+      { id: 'text-embedding-3-small', name: 'Text Embedding 3 Small', dimensions: 768, pricePerMillion: 0.02 },
+      { id: 'text-embedding-3-large', name: 'Text Embedding 3 Large', dimensions: 768, pricePerMillion: 0.13 },
     ],
   },
 ]
@@ -91,33 +87,35 @@ export const DEFAULT_EMBEDDING_CONFIG: Omit<EmbeddingConfig, 'apiKey'> = {
 
 /**
  * Cria o modelo de embedding apropriado baseado no provider configurado
+ * Retorna um modelo compatível com as funções embed/embedMany do AI SDK
  */
-async function getEmbeddingModel(config: EmbeddingConfig): Promise<EmbeddingModel<string>> {
+async function getEmbeddingModel(config: EmbeddingConfig) {
   switch (config.provider) {
     case 'google': {
       const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
       const google = createGoogleGenerativeAI({ apiKey: config.apiKey })
-      return google.textEmbeddingModel(config.model)
+      return google.embedding(config.model)
     }
 
     case 'openai': {
       const { createOpenAI } = await import('@ai-sdk/openai')
       const openai = createOpenAI({ apiKey: config.apiKey })
-      return openai.textEmbeddingModel(config.model)
+      return openai.embedding(config.model)
     }
 
-    case 'voyage': {
-      // Voyage usa um provider community - precisa instalar: npm install voyage-ai-provider
-      const { createVoyage } = await import('voyage-ai-provider')
-      const voyage = createVoyage({ apiKey: config.apiKey })
-      return voyage.textEmbeddingModel(config.model)
-    }
+    // Voyage e Cohere requerem instalação de pacotes adicionais:
+    // npm install @ai-sdk/cohere (para Cohere)
+    // Voyage não tem provider oficial ainda - usar Google ou OpenAI
+    case 'voyage':
+      throw new Error(
+        'Voyage AI não está disponível. Use Google ou OpenAI para embeddings.'
+      )
 
-    case 'cohere': {
-      const { createCohere } = await import('@ai-sdk/cohere')
-      const cohere = createCohere({ apiKey: config.apiKey })
-      return cohere.textEmbeddingModel(config.model)
-    }
+    case 'cohere':
+      throw new Error(
+        'Cohere embeddings requer instalação: npm install @ai-sdk/cohere. ' +
+        'Use Google ou OpenAI como alternativa.'
+      )
 
     default:
       throw new Error(`Unsupported embedding provider: ${config.provider}`)
@@ -125,14 +123,16 @@ async function getEmbeddingModel(config: EmbeddingConfig): Promise<EmbeddingMode
 }
 
 /**
- * Retorna opções específicas do provider para otimização
+ * Retorna providerOptions para o AI SDK
  * - Google: outputDimensionality e taskType (RETRIEVAL_QUERY vs RETRIEVAL_DOCUMENT)
- * - Voyage: inputType (query vs document) e outputDimension
+ * - OpenAI: dimensions para text-embedding-3
+ *
+ * IMPORTANTE: Deve ser passado como `providerOptions: { ... }` no embed/embedMany
  */
 function getProviderOptions(
   config: EmbeddingConfig,
   taskType: 'query' | 'document'
-): Record<string, unknown> {
+): Record<string, Record<string, string | number>> {
   switch (config.provider) {
     case 'google':
       return {
@@ -142,20 +142,16 @@ function getProviderOptions(
         },
       }
 
-    case 'voyage':
-      return {
-        voyage: {
-          inputType: taskType,
-          outputDimension: config.dimensions,
-        },
+    case 'openai':
+      // OpenAI text-embedding-3 suporta dimensões customizadas
+      if (config.model.includes('text-embedding-3')) {
+        return {
+          openai: {
+            dimensions: config.dimensions,
+          },
+        }
       }
-
-    case 'cohere':
-      return {
-        cohere: {
-          inputType: taskType === 'query' ? 'search_query' : 'search_document',
-        },
-      }
+      return {}
 
     default:
       return {}
@@ -184,7 +180,7 @@ export async function generateEmbedding(
     model,
     value: text,
     experimental_telemetry: { isEnabled: false },
-    ...getProviderOptions(config, taskType),
+    providerOptions: getProviderOptions(config, taskType),
   })
 
   return embedding
@@ -209,7 +205,7 @@ export async function generateEmbeddings(
     model,
     values: texts,
     experimental_telemetry: { isEnabled: false },
-    ...getProviderOptions(config, taskType),
+    providerOptions: getProviderOptions(config, taskType),
   })
 
   return embeddings
@@ -303,6 +299,10 @@ export function chunkText(text: string, options: ChunkingOptions = {}): string[]
 
 /**
  * Converte embedding para formato pgvector
+ *
+ * IMPORTANTE: A coluna pgvector deve ter a mesma dimensão do modelo de embedding.
+ * Google Gemini = 768, OpenAI small = 1536, etc.
+ * Não use padding - use a dimensão exata conforme a documentação do Supabase.
  */
 export function toPgVector(embedding: number[]): string {
   return `[${embedding.join(',')}]`

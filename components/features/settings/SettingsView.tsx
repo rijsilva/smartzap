@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { Bot, ChevronRight } from 'lucide-react';
 import { TestContactPanel } from './TestContactPanel';
 import { AutoSuppressionPanel } from './AutoSuppressionPanel';
 import { WorkflowExecutionPanel } from './WorkflowExecutionPanel';
@@ -13,7 +11,6 @@ import { FlowEndpointPanel } from './FlowEndpointPanel';
 import { CredentialsForm } from './CredentialsForm';
 import { NgrokDevPanel } from './NgrokDevPanel';
 import { DevModePanel } from './DevModePanel';
-import { InboxRetentionPanel } from './InboxRetentionPanel';
 import { useDevMode } from '@/components/providers/DevModeProvider';
 import type { SettingsViewProps } from './types';
 
@@ -220,8 +217,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           />
         )}
 
-        {/* WhatsApp Turbo (Adaptive Throttle) */}
-        {settings.isConnected && saveWhatsAppThrottle && (
+        {/* WhatsApp Turbo (Adaptive Throttle) - Dev only */}
+        {isDevMode && settings.isConnected && saveWhatsAppThrottle && (
           <TurboConfigSection
             whatsappThrottle={whatsappThrottle}
             whatsappThrottleLoading={whatsappThrottleLoading}
@@ -231,8 +228,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           />
         )}
 
-        {/* Proteção de Qualidade (Auto-supressão) */}
-        {settings.isConnected && saveAutoSuppression && (
+        {/* Proteção de Qualidade (Auto-supressão) - Dev only */}
+        {isDevMode && settings.isConnected && saveAutoSuppression && (
           <AutoSuppressionPanel
             autoSuppression={autoSuppression}
             autoSuppressionLoading={autoSuppressionLoading}
@@ -241,8 +238,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           />
         )}
 
-        {/* Execução do workflow (global) */}
-        {settings.isConnected && saveWorkflowExecution && (
+        {/* Execução do workflow (global) - Dev only */}
+        {isDevMode && settings.isConnected && saveWorkflowExecution && (
           <WorkflowExecutionPanel
             workflowExecution={workflowExecution}
             workflowExecutionLoading={workflowExecutionLoading}
@@ -254,38 +251,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* Webhook Local (dev only) */}
         {isDevMode && <NgrokDevPanel />}
 
-        {/* Developer Mode Toggle - sempre visível */}
-        <DevModePanel />
 
-        {/* T070: AI Agents Section - Link to AI Agents Configuration */}
-        {settings.isConnected && (
-          <div className="rounded-xl border border-[var(--ds-border-subtle)] bg-[var(--ds-bg-elevated)] p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)]">
-                  <Bot className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">Agentes de IA</h3>
-                  <p className="text-sm text-[var(--ds-text-secondary)]">
-                    Configure agentes de IA para responder automaticamente às conversas
-                  </p>
-                </div>
-              </div>
-              <Link
-                href="/settings/ai/agents"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)] hover:text-[var(--ds-text-primary)] transition-colors"
-              >
-                <span className="text-sm font-medium">Configurar</span>
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
-        )}
-
-
-        {/* T071: Inbox Retention Configuration */}
-        {settings.isConnected && <InboxRetentionPanel />}
 
         {/* Webhook Configuration Section */}
         {settings.isConnected && (webhookUrl || devWebhookUrl) && (
@@ -308,6 +274,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             availableDomains={availableDomains}
           />
         )}
+
+        {/* Developer Mode Toggle - sempre visível, último item */}
+        <DevModePanel />
       </div>
     </div>
   );

@@ -19,6 +19,7 @@ import {
   Target,
 } from 'lucide-react'
 import { HeliconePanel } from '@/components/features/settings/HeliconePanel'
+import { Mem0Panel } from '@/components/features/settings/Mem0Panel'
 import { Page, PageActions, PageDescription, PageHeader, PageTitle } from '@/components/ui/page'
 import { AI_PROVIDERS, type AIProvider } from '@/lib/ai/providers'
 import {
@@ -1209,6 +1210,9 @@ export default function AICenterPage() {
             </div>
           </div>
         </section>
+
+        {/* Mem0 Memory Section */}
+        <Mem0Panel />
 
         {/* Helicone Observability Section */}
         <HeliconePanel />

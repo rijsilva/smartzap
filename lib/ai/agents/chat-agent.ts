@@ -307,6 +307,24 @@ export async function processChatAgent(
   const messageIds = messages.map((m) => m.id)
   const aiMessages = convertToAIMessages(messages.slice(-10))
 
+  // =======================================================================
+  // MEM0: Fetch relevant memories (graceful degradation)
+  // =======================================================================
+  const { fetchRelevantMemories, saveInteractionMemory, isMem0EnabledAsync } = await import('@/lib/ai/mem0-client')
+
+  let memoryContext = { systemPromptAddition: '', memoryCount: 0 }
+  const mem0Enabled = await isMem0EnabledAsync()
+  if (mem0Enabled) {
+    console.log(`[chat-agent] Mem0 enabled, fetching memories for ${conversation.phone}...`)
+    memoryContext = await fetchRelevantMemories(inputText, {
+      user_id: conversation.phone,
+      agent_id: agent.id,
+    })
+    if (memoryContext.memoryCount > 0) {
+      console.log(`[chat-agent] Found ${memoryContext.memoryCount} memories`)
+    }
+  }
+
   // Get model configuration - supports Google, OpenAI, Anthropic
   const modelId = agent.model || DEFAULT_MODEL_ID
   const provider = getProviderFromModel(modelId)
@@ -345,8 +363,10 @@ export async function processChatAgent(
     // TOOL-BASED RAG: LLM decides when to search
     // =======================================================================
 
-    // Use agent's system prompt as-is
-    const systemPrompt = agent.system_prompt
+    // Use agent's system prompt + memory context (if available)
+    const systemPrompt = memoryContext.systemPromptAddition
+      ? `${agent.system_prompt}\n\n${memoryContext.systemPromptAddition}`
+      : agent.system_prompt
 
     // Define respond tool (required for structured output)
     // Schema é dinâmico baseado em handoff_enabled
@@ -553,6 +573,22 @@ export async function processChatAgent(
       error: null,
       modelUsed: modelId,
     })
+
+    // Save interaction to Mem0 (fire-and-forget, não bloqueia resposta)
+    if (mem0Enabled) {
+      saveInteractionMemory(
+        [
+          { role: 'user', content: inputText },
+          { role: 'assistant', content: response.message },
+        ],
+        {
+          user_id: conversation.phone,
+          agent_id: agent.id,
+        }
+      ).catch((err) => {
+        console.warn(`[chat-agent] Failed to save memory: ${err.message}`)
+      })
+    }
 
     return { success: true, response, latencyMs, logId }
   }

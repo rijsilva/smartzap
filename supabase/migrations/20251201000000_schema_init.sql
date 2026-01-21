@@ -926,12 +926,14 @@ CREATE INDEX IF NOT EXISTS idx_campaign_tag_assignments_campaign ON campaign_tag
 CREATE INDEX IF NOT EXISTS idx_campaign_tag_assignments_tag ON campaign_tag_assignments(tag_id);
 
 -- Indexes attendant_tokens
-CREATE UNIQUE INDEX IF NOT EXISTS idx_attendant_tokens_token ON attendant_tokens(token);
-CREATE INDEX IF NOT EXISTS idx_attendant_tokens_is_active ON attendant_tokens(is_active) WHERE is_active = true;
+-- attendant_tokens_token_key é criado automaticamente pelo UNIQUE constraint
+CREATE INDEX IF NOT EXISTS idx_attendant_tokens_active ON attendant_tokens(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_attendant_tokens_token ON attendant_tokens(token);
 
 -- Indexes push_subscriptions
-CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint);
-CREATE INDEX IF NOT EXISTS idx_push_subscriptions_attendant_token_id ON push_subscriptions(attendant_token_id);
+-- push_subscriptions_endpoint_key é criado automaticamente pelo UNIQUE constraint
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_attendant ON push_subscriptions(attendant_token_id);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_created ON push_subscriptions(created_at DESC);
 
 -- =============================================================================
 -- PARTE 8: TRIGGERS
@@ -951,8 +953,8 @@ CREATE TRIGGER update_ai_knowledge_files_updated_at BEFORE UPDATE ON ai_knowledg
 DROP TRIGGER IF EXISTS trg_campaign_folders_updated_at ON campaign_folders;
 CREATE TRIGGER trg_campaign_folders_updated_at BEFORE UPDATE ON campaign_folders FOR EACH ROW EXECUTE FUNCTION update_campaign_folders_updated_at();
 
-DROP TRIGGER IF EXISTS trg_attendant_tokens_updated_at ON attendant_tokens;
-CREATE TRIGGER trg_attendant_tokens_updated_at BEFORE UPDATE ON attendant_tokens FOR EACH ROW EXECUTE FUNCTION update_attendant_tokens_updated_at();
+DROP TRIGGER IF EXISTS trigger_attendant_tokens_updated_at ON attendant_tokens;
+CREATE TRIGGER trigger_attendant_tokens_updated_at BEFORE UPDATE ON attendant_tokens FOR EACH ROW EXECUTE FUNCTION update_attendant_tokens_updated_at();
 
 -- =============================================================================
 -- PARTE 9: FOREIGN KEYS (todas juntas no final para evitar problemas de ordem)
@@ -1100,17 +1102,7 @@ CREATE POLICY "campaign_tag_assignments_delete" ON campaign_tag_assignments FOR 
 
 -- Attendant Tokens
 ALTER TABLE attendant_tokens ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "attendant_tokens_select" ON attendant_tokens FOR SELECT TO authenticated USING (true);
-CREATE POLICY "attendant_tokens_insert" ON attendant_tokens FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "attendant_tokens_update" ON attendant_tokens FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "attendant_tokens_delete" ON attendant_tokens FOR DELETE TO authenticated USING (true);
-
--- Push Subscriptions
-ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "push_subscriptions_select" ON push_subscriptions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "push_subscriptions_insert" ON push_subscriptions FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "push_subscriptions_update" ON push_subscriptions FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "push_subscriptions_delete" ON push_subscriptions FOR DELETE TO authenticated USING (true);
+CREATE POLICY "Service role has full access to attendant_tokens" ON attendant_tokens FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- =============================================================================
 -- PARTE 12: REALTIME

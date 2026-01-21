@@ -409,6 +409,7 @@ import { PrefetchLink } from '@/components/ui/PrefetchLink'
 import { AccountAlertBanner } from '@/components/ui/AccountAlertBanner'
 import { DashboardSidebar, type NavItem } from '@/components/layout/DashboardSidebar'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { useDevMode } from '@/components/providers/DevModeProvider'
 
 export function DashboardShell({
     children,
@@ -446,6 +447,9 @@ export function DashboardShell({
 
     // T069: Unread count for inbox badge in sidebar
     const { count: unreadCount } = useUnreadCount()
+
+    // Dev mode for hiding dev-only nav items
+    const { isDevMode } = useDevMode()
 
     const { data: authStatus } = useQuery({
         queryKey: ['authStatus'],
@@ -562,13 +566,13 @@ export function DashboardShell({
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/campaigns', label: 'Campanhas', icon: MessageSquare },
         { path: '/inbox', label: 'Inbox', icon: MessageCircle, badge: unreadCount > 0 ? String(unreadCount > 99 ? '99+' : unreadCount) : undefined },
-        { path: '/workflows', label: 'Workflow', icon: Workflow, badge: 'beta', disabled: true },
+        { path: '/workflows', label: 'Workflow', icon: Workflow, badge: 'beta', disabled: true, hidden: !isDevMode },
         { path: '/conversations', label: 'Conversas', icon: MessageCircle, hidden: true },
         { path: '/templates', label: 'Templates', icon: FileText },
         { path: '/contacts', label: 'Contatos', icon: Users },
         { path: '/settings/ai', label: 'IA', icon: Sparkles },
         { path: '/settings', label: 'Configurações', icon: Settings },
-    ].filter(item => !item.hidden), [unreadCount])
+    ].filter(item => !item.hidden), [unreadCount, isDevMode])
 
     const getPageTitle = (path: string) => {
         if (path === '/') return 'Dashboard'

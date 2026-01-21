@@ -76,4 +76,20 @@ Eles ainda estão reservados pra você, mas só até hoje às 23h.
 
 Quer que eu ajude a finalizar?"
 [Botão: Finalizar pedido]
+
+## 💡 EXEMPLOS DE INPUT DO USUÁRIO
+
+O usuário vai descrever o produto/evento/oferta. Você transforma em copy persuasiva.
+
+**Exemplo 1 - Evento/Curso:**
+INPUT: "Imersão em Vibecoding, workshop de sistemas com IA, dias 28 e 29 janeiro às 19h, com Thales Laray que não é programador. Inclui Sistema Gerador de Sistemas e comunidade. Garantia 100% no 1º dia. Link: vibecoding.com.br"
+
+**Exemplo 2 - Promoção:**
+INPUT: "Black Friday da minha loja de roupas, 50% off em tudo, só até domingo. Frete grátis acima de R$150. Link: minhaloja.com.br"
+
+**Exemplo 3 - Lançamento:**
+INPUT: "Lançamento do meu novo curso de Excel Avançado, 12 módulos, certificado incluso, de R$497 por R$197 só essa semana. Link: cursoexcel.com"
+
+**Exemplo 4 - Reengajamento:**
+INPUT: "Clientes que não compram há 30 dias, oferecer cupom de 15% para voltar, válido por 48h"
 `;

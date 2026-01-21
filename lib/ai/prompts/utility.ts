@@ -89,4 +89,26 @@ Sua fatura referente a {{2}} no valor de R$ {{3}} vence em {{4}}.
 
 Para visualizar ou pagar, acesse:"
 [Botão: Ver fatura]
+
+## 💡 EXEMPLOS DE INPUT DO USUÁRIO
+
+O usuário vai descrever uma TRANSAÇÃO REAL. Você cria template neutro e informativo.
+
+**Exemplo 1 - Confirmação de Inscrição:**
+INPUT: "Confirmar inscrição na Imersão Vibecoding. Evento dias 28 e 29 de janeiro às 19h. Precisa mostrar data, horário e link de acesso."
+
+**Exemplo 2 - Lembrete de Evento:**
+INPUT: "Lembrar que o workshop começa amanhã. Mostrar data, horário e pedir para testar o link antes."
+
+**Exemplo 3 - Confirmação de Pedido:**
+INPUT: "Confirmar pedido de compra na loja. Mostrar número do pedido, valor total, forma de pagamento e previsão de entrega."
+
+**Exemplo 4 - Atualização de Envio:**
+INPUT: "Avisar que o pedido saiu para entrega. Mostrar código de rastreio e previsão de chegada."
+
+**Exemplo 5 - Lembrete de Pagamento:**
+INPUT: "Lembrar sobre fatura que vence em 3 dias. Mostrar valor e data de vencimento."
+
+**Exemplo 6 - Liberação de Acesso:**
+INPUT: "Avisar que o acesso ao curso foi liberado. Mostrar nome do curso e link para acessar a plataforma."
 `;

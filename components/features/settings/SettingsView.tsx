@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Bot, ChevronRight } from 'lucide-react';
+import { Bot, ChevronRight, Send } from 'lucide-react';
 import { TestContactPanel } from './TestContactPanel';
 import { AutoSuppressionPanel } from './AutoSuppressionPanel';
 import { WorkflowExecutionPanel } from './WorkflowExecutionPanel';
@@ -274,6 +274,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               <Link
                 href="/settings/ai/agents"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)] hover:text-[var(--ds-text-primary)] transition-colors"
+              >
+                <span className="text-sm font-medium">Configurar</span>
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Telegram Mini App Section */}
+        {settings.isConnected && (
+          <div className="rounded-xl border border-[var(--ds-border-subtle)] bg-[var(--ds-bg-elevated)] p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)]">
+                  <Send className="h-6 w-6 text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-[var(--ds-text-primary)]">Telegram Mini App</h3>
+                  <p className="text-sm text-[var(--ds-text-secondary)]">
+                    Configure o bot do Telegram para acessar o monitor via celular
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/settings/telegram"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--ds-bg-surface)] border border-[var(--ds-border-default)] text-[var(--ds-text-secondary)] hover:bg-[var(--ds-bg-hover)] hover:text-[var(--ds-text-primary)] transition-colors"
               >
                 <span className="text-sm font-medium">Configurar</span>

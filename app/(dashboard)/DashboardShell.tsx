@@ -690,21 +690,13 @@ export function DashboardShell({
     }
 
     // Determina se deve mostrar o modal de onboarding do WhatsApp
-    // Mostra quando:
-    // 1. Infra OK
-    // 2. Onboarding não marcado como completo no banco
-    // 3. E uma das condições:
-    //    a) WhatsApp não conectado (precisa fazer wizard inicial)
-    //    b) WhatsApp conectado MAS wizard ainda em andamento (currentStep não é 'complete' nem 'welcome')
-    const isWizardInProgress = onboardingProgress.currentStep !== 'complete' &&
-                               onboardingProgress.currentStep !== 'welcome' &&
-                               onboardingProgress.path !== null
+    // Mostra quando: infra OK E onboarding não marcado como completo no banco
+    const showWhatsAppOnboarding = !needsSetup && !isOnboardingCompletedInDb
 
-    const showWhatsAppOnboarding = !needsSetup &&
-        !isOnboardingCompletedInDb && (
-            !isWhatsAppConnected || // Caso 1: precisa conectar
-            (isWhatsAppConnected && isWizardInProgress) // Caso 2: conectou mas wizard não terminou
-        )
+    // Se WhatsApp já conectado mas onboarding não completo, força ir para step de webhook
+    const onboardingForceStep = isWhatsAppConnected && !isOnboardingCompletedInDb
+        ? 'configure-webhook' as const
+        : undefined
 
     const isBuilderRoute = pathname?.startsWith('/builder') ?? false
     const isInboxRoute = pathname?.startsWith('/inbox') ?? false
@@ -867,6 +859,7 @@ export function DashboardShell({
                         isConnected={!!isWhatsAppConnected}
                         onSaveCredentials={handleSaveCredentials}
                         onMarkComplete={handleMarkOnboardingComplete}
+                        forceStep={onboardingForceStep}
                     />
                 )}
 

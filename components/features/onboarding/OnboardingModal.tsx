@@ -174,13 +174,21 @@ export function OnboardingModal({ isConnected, onSaveCredentials, onMarkComplete
       case 'configure-webhook':
         return (
           <ConfigureWebhookStep
-            onNext={() => {
-              // Sempre fecha o modal após configurar webhook
-              // Os próximos steps são opcionais e podem ser feitos pelo checklist
+            onNext={async () => {
+              // Marca webhook como completo
               completeStep('configure-webhook');
+              // Marca onboarding como completo no banco
+              await onMarkComplete();
+              // Fecha o modal
+              completeOnboarding();
               goToStep('complete');
             }}
-            onBack={() => goToStep('complete')}
+            onBack={async () => {
+              // Se voltar, ainda marca como completo (webhook é opcional)
+              await onMarkComplete();
+              completeOnboarding();
+              goToStep('complete');
+            }}
             stepNumber={6}
             totalSteps={totalSteps}
           />

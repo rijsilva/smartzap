@@ -689,12 +689,16 @@ export function buildMetaTemplatePayload(input: {
     }
   } else if (values.buttons?.length) {
     for (const btn of values.buttons) {
-      payload.template.components.push({
+      const buttonComponent: any = {
         type: 'button',
         sub_type: 'url',
         index: String(btn.index),
-        parameters: btn.params.map((p) => ({ type: 'text', text: p.text })),
-      })
+      }
+      // Só inclui parameters se houver parâmetros (botões estáticos não aceitam)
+      if (btn.params.length > 0) {
+        buttonComponent.parameters = btn.params.map((p) => ({ type: 'text', text: p.text }))
+      }
+      payload.template.components.push(buttonComponent)
     }
   }
 

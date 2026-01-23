@@ -41,23 +41,27 @@ export const CredentialsForm = forwardRef<HTMLDivElement, CredentialsFormProps>(
       setMetaAppIdQuick(metaApp?.appId || '');
     }, [metaApp?.appId]);
 
-    const handleSave = () => {
-      onSave();
-      onClose();
+    const handleSave = async () => {
+      try {
+        await onSave();
+        onClose();
 
-      // Best-effort: salva Meta App ID junto, sem bloquear o salvamento do WhatsApp.
-      const nextAppId = metaAppIdQuick.trim();
-      const currentAppId = String(metaApp?.appId || '').trim();
-      if (nextAppId && nextAppId !== currentAppId) {
-        settingsService
-          .saveMetaAppConfig({ appId: nextAppId, appSecret: '' })
-          .then(() => {
-            refreshMetaApp?.();
-          })
-          .catch((e) => {
-            // Nao bloqueia o fluxo principal.
-            toast.warning(e instanceof Error ? e.message : 'Falha ao salvar Meta App ID');
-          });
+        // Best-effort: salva Meta App ID junto, sem bloquear o salvamento do WhatsApp.
+        const nextAppId = metaAppIdQuick.trim();
+        const currentAppId = String(metaApp?.appId || '').trim();
+        if (nextAppId && nextAppId !== currentAppId) {
+          settingsService
+            .saveMetaAppConfig({ appId: nextAppId, appSecret: '' })
+            .then(() => {
+              refreshMetaApp?.();
+            })
+            .catch((e) => {
+              // Nao bloqueia o fluxo principal.
+              toast.warning(e instanceof Error ? e.message : 'Falha ao salvar Meta App ID');
+            });
+        }
+      } catch {
+        // Erro já tratado no hook, não fecha o formulário
       }
     };
 

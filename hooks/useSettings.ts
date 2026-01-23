@@ -258,6 +258,8 @@ export const useSettingsController = () => {
     mutationFn: settingsService.save,
     onSuccess: (data) => {
       queryClient.setQueryData(['settings'], data);
+      // Invalida allSettings para atualizar isConnected na UI
+      queryClient.invalidateQueries({ queryKey: ['allSettings'] });
       toast.success('Configuração salva com sucesso!');
     },
     onError: () => {
@@ -496,11 +498,15 @@ export const useSettingsController = () => {
         verifiedName: metaData.verified_name
       };
 
-      // 4. Save
-      saveMutation.mutate(finalSettings);
+      // 4. Save (usando mutateAsync para aguardar conclusão)
+      await saveMutation.mutateAsync(finalSettings);
+
+      // 5. Atualiza estado local para refletir conexão
+      setFormSettings(finalSettings);
     } catch (error) {
       toast.error('Erro ao conectar com a Meta API. Verifique as credenciais.');
       console.error(error);
+      throw error; // Re-throw para o caller saber que falhou
     }
   };
 

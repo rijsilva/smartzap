@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -25,113 +25,153 @@ import { DirectCredentialsStep } from './steps/DirectCredentialsStep';
 import { OnboardingCompleteStep } from './steps/OnboardingCompleteStep';
 import { Button } from '@/components/ui/button';
 
-// Renderiza step em modo tutorial (read-only, só visualização)
-function renderTutorialStep(step: OnboardingStep, onClose?: () => void) {
-  // Função que garante fechamento (async para compatibilidade com onComplete)
-  const handleClose = async () => {
-    console.log('[Tutorial] Fechando modal...');
-    if (onClose) {
+// Ordem dos steps do tutorial (fluxo completo de configuração)
+const TUTORIAL_STEPS: OnboardingStep[] = [
+  'requirements',
+  'create-app',
+  'add-whatsapp',
+  'credentials',
+  'test-connection',
+  'configure-webhook',
+  'sync-templates',
+  'send-first-message',
+  'create-permanent-token',
+];
+
+// Componente interno para wizard de tutorial com navegação sequencial
+function TutorialWizard({
+  initialStep,
+  onClose
+}: {
+  initialStep: OnboardingStep;
+  onClose: () => void;
+}) {
+  // Encontra o índice inicial baseado no step fornecido
+  const initialIndex = TUTORIAL_STEPS.indexOf(initialStep);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex >= 0 ? initialIndex : 0);
+  const [credentials, setCredentials] = useState({
+    phoneNumberId: '',
+    businessAccountId: '',
+    accessToken: '',
+  });
+
+  const currentStep = TUTORIAL_STEPS[currentIndex];
+  const totalSteps = TUTORIAL_STEPS.length;
+  const stepNumber = currentIndex + 1;
+  const isLastStep = currentIndex === totalSteps - 1;
+  const isFirstStep = currentIndex === 0;
+
+  const handleNext = useCallback(async () => {
+    if (isLastStep) {
       onClose();
+    } else {
+      setCurrentIndex(prev => prev + 1);
+    }
+  }, [isLastStep, onClose]);
+
+  const handleBack = useCallback(() => {
+    if (isFirstStep) {
+      onClose();
+    } else {
+      setCurrentIndex(prev => prev - 1);
+    }
+  }, [isFirstStep, onClose]);
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 'requirements':
+        return (
+          <RequirementsStep
+            onNext={handleNext}
+            onBack={handleBack}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      case 'create-app':
+        return (
+          <CreateAppStep
+            onNext={handleNext}
+            onBack={handleBack}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      case 'add-whatsapp':
+        return (
+          <AddWhatsAppStep
+            onNext={handleNext}
+            onBack={handleBack}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      case 'credentials':
+        return (
+          <CredentialsStep
+            credentials={credentials}
+            onCredentialsChange={setCredentials}
+            onNext={handleNext}
+            onBack={handleBack}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      case 'test-connection':
+        return (
+          <TestConnectionStep
+            credentials={credentials}
+            onComplete={handleNext}
+            onBack={handleBack}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      case 'configure-webhook':
+        return (
+          <ConfigureWebhookStep
+            onNext={handleNext}
+            onBack={handleBack}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      case 'sync-templates':
+        return (
+          <SyncTemplatesStep
+            onNext={handleNext}
+            onBack={handleBack}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      case 'send-first-message':
+        return (
+          <SendFirstMessageStep
+            onNext={handleNext}
+            onBack={handleBack}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      case 'create-permanent-token':
+        return (
+          <CreatePermanentTokenStep
+            currentToken=""
+            onTokenUpdate={async () => {}}
+            onNext={onClose}
+            onBack={handleBack}
+            onSkip={onClose}
+            stepNumber={stepNumber}
+            totalSteps={totalSteps}
+          />
+        );
+      default:
+        return null;
     }
   };
 
-  const closeButton = (
-    <div className="flex justify-end pt-4">
-      <Button onClick={handleClose}>Fechar</Button>
-    </div>
-  );
-
-  switch (step) {
-    case 'requirements':
-      return (
-        <RequirementsStep
-          onNext={handleClose}
-          onBack={handleClose}
-          stepNumber={1}
-          totalSteps={9}
-        />
-      );
-    case 'create-app':
-      return (
-        <CreateAppStep
-          onNext={handleClose}
-          onBack={handleClose}
-          stepNumber={2}
-          totalSteps={9}
-        />
-      );
-    case 'add-whatsapp':
-      return (
-        <AddWhatsAppStep
-          onNext={handleClose}
-          onBack={handleClose}
-          stepNumber={3}
-          totalSteps={9}
-        />
-      );
-    case 'credentials':
-      return (
-        <CredentialsStep
-          credentials={{ phoneNumberId: '', businessAccountId: '', accessToken: '' }}
-          onCredentialsChange={() => {}}
-          onNext={handleClose}
-          onBack={handleClose}
-          stepNumber={4}
-          totalSteps={9}
-        />
-      );
-    case 'test-connection':
-      return (
-        <TestConnectionStep
-          credentials={{ phoneNumberId: '', businessAccountId: '', accessToken: '' }}
-          onComplete={handleClose}
-          onBack={handleClose}
-          stepNumber={5}
-          totalSteps={9}
-        />
-      );
-    case 'configure-webhook':
-      return (
-        <ConfigureWebhookStep
-          onNext={handleClose}
-          onBack={handleClose}
-          stepNumber={6}
-          totalSteps={9}
-        />
-      );
-    case 'sync-templates':
-      return (
-        <SyncTemplatesStep
-          onNext={handleClose}
-          onBack={handleClose}
-          stepNumber={7}
-          totalSteps={9}
-        />
-      );
-    case 'send-first-message':
-      return (
-        <SendFirstMessageStep
-          onNext={handleClose}
-          onBack={handleClose}
-          stepNumber={8}
-          totalSteps={9}
-        />
-      );
-    case 'create-permanent-token':
-      return (
-        <CreatePermanentTokenStep
-          currentToken=""
-          onTokenUpdate={async () => {}}
-          onNext={handleClose}
-          onBack={handleClose}
-          onSkip={handleClose}
-          stepNumber={9}
-          totalSteps={9}
-        />
-      );
-    default:
-      return closeButton;
-  }
+  return renderStep();
 }
 
 interface OnboardingModalProps {
@@ -171,7 +211,7 @@ export function OnboardingModal({ isConnected, onSaveCredentials, onMarkComplete
   } = useOnboardingProgress();
 
   // ============================================================================
-  // MODO TUTORIAL: Simples - mostra o step e fecha quando clicar
+  // MODO TUTORIAL: Wizard com navegação sequencial pelos 9 passos
   // ============================================================================
   if (tutorialMode && forceStep) {
     const handleTutorialClose = () => {
@@ -187,11 +227,11 @@ export function OnboardingModal({ isConnected, onSaveCredentials, onMarkComplete
           showCloseButton={true}
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>Tutorial</DialogTitle>
-            <DialogDescription>Tutorial de configuração</DialogDescription>
+            <DialogTitle>Tutorial de Configuração</DialogTitle>
+            <DialogDescription>Guia passo a passo para configurar o WhatsApp Business</DialogDescription>
           </DialogHeader>
 
-          {renderTutorialStep(forceStep, handleTutorialClose)}
+          <TutorialWizard initialStep={forceStep} onClose={handleTutorialClose} />
         </DialogContent>
       </Dialog>
     );

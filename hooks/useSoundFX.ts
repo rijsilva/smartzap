@@ -6,12 +6,8 @@
  */
 
 let audioCtx: AudioContext | null = null;
-let ambientNodes: {
-  oscillators: OscillatorNode[];
-  gains: GainNode[];
-  masterGain: GainNode | null;
-  lfo: OscillatorNode | null;
-} | null = null;
+let ambientAudio: HTMLAudioElement | null = null;
+let ambientPlaying = false;
 
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
@@ -155,145 +151,84 @@ export function playClick() {
 }
 
 /**
- * Ambient pad - Vangelis/Blade Runner style
- * CS-80 vibes: etéreo, melancólico, com reverb e shimmer
+ * Ambient music - HTMLAudioElement puro (mais compatível)
+ * Fade in/out via volume property
  */
-export function startAmbient() {
-  try {
-    if (ambientNodes) return; // Já está tocando
-
-    const ctx = getAudioContext();
-    console.log('[SoundFX] Starting Vangelis-style ambient...');
-
-    // Master gain (volume bem baixo - subliminar)
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0, ctx.currentTime);
-    masterGain.gain.linearRampToValueAtTime(0.025, ctx.currentTime + 6); // Fade in lento 6s
-    masterGain.connect(ctx.destination);
-
-    // Reverb simulado com delay + feedback
-    const delayNode = ctx.createDelay(2.0);
-    const feedbackGain = ctx.createGain();
-    const reverbFilter = ctx.createBiquadFilter();
-
-    delayNode.delayTime.setValueAtTime(0.4, ctx.currentTime);
-    feedbackGain.gain.setValueAtTime(0.3, ctx.currentTime); // Feedback para reverb longo
-    reverbFilter.type = 'lowpass';
-    reverbFilter.frequency.setValueAtTime(2000, ctx.currentTime); // Reverb mais escuro
-
-    delayNode.connect(feedbackGain);
-    feedbackGain.connect(reverbFilter);
-    reverbFilter.connect(delayNode);
-    delayNode.connect(masterGain);
-
-    // Dry/Wet mix node
-    const dryGain = ctx.createGain();
-    const wetGain = ctx.createGain();
-    dryGain.gain.setValueAtTime(0.6, ctx.currentTime);
-    wetGain.gain.setValueAtTime(0.4, ctx.currentTime);
-    dryGain.connect(masterGain);
-    wetGain.connect(delayNode);
-
-    // LFO muito lento (breathing - 1 ciclo a cada 30s)
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(0.033, ctx.currentTime);
-    lfoGain.gain.setValueAtTime(1.5, ctx.currentTime);
-    lfo.connect(lfoGain);
-    lfo.start();
-
-    // Acorde Amaj7 nas oitavas altas - som "agridoce" do Blade Runner
-    // A4, C#5, E5, G#5 (com 7ª maior para aquele feeling melancólico)
-    const frequencies = [440, 554.37, 659.25, 830.61];
-    const oscillators: OscillatorNode[] = [];
-    const gains: GainNode[] = [];
-
-    frequencies.forEach((freq, i) => {
-      // Três osciladores por nota: fundamental + detuned para chorus
-      [-4, 0, 4].forEach((detune) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        osc.detune.setValueAtTime(detune, ctx.currentTime);
-
-        // LFO modula frequência sutilmente
-        lfoGain.connect(osc.frequency);
-
-        // Volume: notas mais altas mais suaves
-        const vol = 0.12 / (i + 1);
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-
-        osc.connect(gain);
-        gain.connect(dryGain);
-        gain.connect(wetGain);
-
-        osc.start();
-        oscillators.push(osc);
-        gains.push(gain);
-      });
-    });
-
-    // Shimmer: harmônicos bem altos e sutis (oitava acima, bem quiet)
-    const shimmerFreqs = [880, 1108.73, 1318.51];
-    shimmerFreqs.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const shimmerFilter = ctx.createBiquadFilter();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      // Leve movimento no shimmer
-      osc.detune.setValueAtTime(0, ctx.currentTime);
-
-      // Filtro para suavizar shimmer
-      shimmerFilter.type = 'lowpass';
-      shimmerFilter.frequency.setValueAtTime(3000, ctx.currentTime);
-
-      // Volume muito baixo
-      gain.gain.setValueAtTime(0.02, ctx.currentTime);
-
-      osc.connect(shimmerFilter);
-      shimmerFilter.connect(gain);
-      gain.connect(wetGain); // Shimmer só no wet (reverb)
-
-      osc.start();
-      oscillators.push(osc);
-      gains.push(gain);
-    });
-
-    ambientNodes = { oscillators, gains, masterGain, lfo };
-  } catch (e) {
-    console.warn('[SoundFX] startAmbient error:', e);
+export function startAmbient(): void {
+  if (ambientPlaying) {
+    console.log('[SoundFX] Ambient already playing, skipping');
+    return;
   }
+
+  console.log('[SoundFX] Starting ambient music...');
+
+  // Cria elemento de áudio se não existe
+  if (!ambientAudio) {
+    ambientAudio = new Audio('/nexus.mp3');
+    ambientAudio.loop = true;
+    ambientAudio.volume = 0;
+    ambientAudio.preload = 'auto';
+  }
+
+  // play() retorna Promise, mas chamamos de forma síncrona
+  const playPromise = ambientAudio.play();
+
+  if (playPromise !== undefined) {
+    playPromise
+      .then(() => {
+        ambientPlaying = true;
+        console.log('[SoundFX] Audio playing! Starting fade in...');
+        // Fade in simples com setInterval
+        fadeVolume(ambientAudio!, 0.3, 3000);
+      })
+      .catch((error) => {
+        console.error('[SoundFX] Play failed:', error.name, error.message);
+        ambientPlaying = false;
+      });
+  }
+}
+
+/**
+ * Fade volume de um elemento de áudio
+ */
+function fadeVolume(audio: HTMLAudioElement, targetVolume: number, duration: number): void {
+  const startVolume = audio.volume;
+  const volumeDiff = targetVolume - startVolume;
+  const steps = 30;
+  const stepTime = duration / steps;
+  let currentStep = 0;
+
+  const fadeInterval = setInterval(() => {
+    currentStep++;
+    const progress = currentStep / steps;
+    audio.volume = startVolume + (volumeDiff * progress);
+
+    if (currentStep >= steps) {
+      clearInterval(fadeInterval);
+      audio.volume = targetVolume;
+    }
+  }, stepTime);
 }
 
 /**
  * Para o ambient com fade out suave
  */
-export function stopAmbient() {
-  if (!ambientNodes) return;
+export function stopAmbient(): void {
+  if (!ambientPlaying || !ambientAudio) return;
 
-  const ctx = getAudioContext();
-  const { oscillators, masterGain, lfo } = ambientNodes;
+  console.log('[SoundFX] Stopping ambient music...');
 
-  // Fade out bem suave (3 segundos)
-  if (masterGain) {
-    masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 3);
-  }
+  // Fade out
+  fadeVolume(ambientAudio, 0, 2000);
 
-  // Para tudo após fade out
+  // Para após fade out
   setTimeout(() => {
-    oscillators.forEach((osc) => {
-      try { osc.stop(); } catch {}
-    });
-    if (lfo) {
-      try { lfo.stop(); } catch {}
+    if (ambientAudio) {
+      ambientAudio.pause();
+      ambientAudio.currentTime = 0;
     }
-    ambientNodes = null;
-  }, 3200);
+    ambientPlaying = false;
+  }, 2100);
 }
 
 /**

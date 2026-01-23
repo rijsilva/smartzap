@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useRef, useCallback } from 'react';
 import { StepDots } from './StepDots';
 import { RainEffect } from './RainEffect';
 import { cn } from '@/lib/utils';
@@ -30,31 +30,27 @@ export function InstallLayout({
 }: InstallLayoutProps) {
   const audioStartedRef = useRef(false);
 
-  // Inicia ambient após primeira interação (política de autoplay)
+  // Handler de clique direto no elemento (não no document)
+  // Isso é reconhecido como "user gesture" pelo browser
+  const handleInteraction = useCallback(() => {
+    if (!audioStartedRef.current) {
+      audioStartedRef.current = true;
+      console.log('[InstallLayout] User interaction - starting ambient...');
+      startAmbient();
+    }
+  }, []);
+
+  // Cleanup no unmount
   useEffect(() => {
-    const enableAudio = () => {
-      if (!audioStartedRef.current) {
-        audioStartedRef.current = true;
-        console.log('[InstallLayout] User interaction detected, starting ambient...');
-        startAmbient();
-        // Remove listeners após ativar
-        document.removeEventListener('click', enableAudio);
-        document.removeEventListener('keydown', enableAudio);
-      }
-    };
-
-    document.addEventListener('click', enableAudio);
-    document.addEventListener('keydown', enableAudio);
-
-    // Cleanup só no unmount
     return () => {
-      document.removeEventListener('click', enableAudio);
-      document.removeEventListener('keydown', enableAudio);
+      console.log('[InstallLayout] Unmount - stopping ambient');
       stopAmbient();
     };
-  }, []); // Sem dependências - roda só uma vez
+  }, []);
   return (
     <div
+      onClick={handleInteraction}
+      onKeyDown={handleInteraction}
       className={cn(
         'dark blade-runner',
         'min-h-screen flex flex-col items-center justify-center p-4',

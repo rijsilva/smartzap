@@ -32,6 +32,7 @@ const IGNORE_PATTERNS = [
   /\/api\//,                      // API routes
   /\/_next\/webpack-hmr/,         // HMR (dev only)
   /chrome-extension/,             // Browser extensions
+  /\.(?:mp3|wav|ogg|m4a|aac)$/,   // Audio files (evita corrupção pelo cache)
 ]
 
 // =============================================================================

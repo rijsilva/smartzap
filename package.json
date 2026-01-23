@@ -8,6 +8,7 @@
     "dev:ai": "AI_DEVTOOLS=1 next dev --turbopack",
     "ai:devtools": "npx @ai-sdk/devtools",
     "dev:tunnel": "node scripts/dev-with-tunnel.mjs",
+    "dev:tunnel:ai": "AI_DEVTOOLS=1 node scripts/dev-with-tunnel.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint app components hooks lib services scripts utils --ext .js,.jsx,.ts,.tsx,.mjs,.cjs",

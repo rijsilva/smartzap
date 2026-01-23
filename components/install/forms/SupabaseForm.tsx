@@ -129,7 +129,8 @@ export function SupabaseForm({ data, onComplete, onBack, showBack }: FormProps) 
         autoFocus
       />
 
-      {/* Collapsible help */}
+      {/* Collapsible help - esconde durante validação */}
+      {!validating && (
       <details className="w-full group">
         <summary className="flex items-center justify-center gap-1.5 text-sm font-mono text-[var(--br-dust-gray)] hover:text-[var(--br-muted-cyan)] cursor-pointer list-none transition-colors">
           <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
@@ -161,6 +162,7 @@ export function SupabaseForm({ data, onComplete, onBack, showBack }: FormProps) 
           </p>
         </div>
       </details>
+      )}
     </div>
   );
 }

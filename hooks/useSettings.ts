@@ -270,7 +270,7 @@ export const useSettingsController = () => {
   const saveAIMutation = useMutation({
     mutationFn: settingsService.saveAIConfig,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['aiSettings'] });
+      queryClient.invalidateQueries({ queryKey: ['allSettings'] });
       toast.success('Configuração de IA salva com sucesso!');
     },
     // Error is handled inline in the component
@@ -279,7 +279,7 @@ export const useSettingsController = () => {
   const removeAIMutation = useMutation({
     mutationFn: settingsService.removeAIKey,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['aiSettings'] });
+      queryClient.invalidateQueries({ queryKey: ['allSettings'] });
     },
     onError: () => {
       toast.error('Erro ao remover chave de IA.');
@@ -290,7 +290,7 @@ export const useSettingsController = () => {
   const saveTestContactMutation = useMutation({
     mutationFn: settingsService.saveTestContact,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['testContact'] });
+      queryClient.invalidateQueries({ queryKey: ['allSettings'] });
       toast.success('Contato de teste salvo!');
     },
     onError: () => {
@@ -301,7 +301,7 @@ export const useSettingsController = () => {
   const removeTestContactMutation = useMutation({
     mutationFn: settingsService.removeTestContact,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['testContact'] });
+      queryClient.invalidateQueries({ queryKey: ['allSettings'] });
       toast.success('Contato de teste removido!');
     },
     onError: () => {
@@ -334,7 +334,7 @@ export const useSettingsController = () => {
   const saveCalendarBookingMutation = useMutation({
     mutationFn: settingsService.saveCalendarBookingConfig,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['calendarBookingConfig'] })
+      queryClient.invalidateQueries({ queryKey: ['allSettings'] })
       toast.success('Configuração de agendamento salva!')
     },
     onError: (err: any) => {
@@ -346,7 +346,7 @@ export const useSettingsController = () => {
     mutationFn: (data: Partial<WorkflowExecutionConfig>) =>
       settingsService.saveWorkflowExecutionConfig(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workflowExecutionConfig'] })
+      queryClient.invalidateQueries({ queryKey: ['allSettings'] })
       toast.success('Configuração de execução salva!')
     },
     onError: (err: any) => {
@@ -769,7 +769,7 @@ export const useSettingsController = () => {
     // Meta App (opcional)
     metaApp: metaAppQuery.data || null,
     metaAppLoading: metaAppQuery.isLoading,
-    refreshMetaApp: () => queryClient.invalidateQueries({ queryKey: ['metaAppConfig'] }),
+    refreshMetaApp: () => queryClient.invalidateQueries({ queryKey: ['allSettings'] }),
     // Test Contact - persisted in Supabase
     testContact: testContactQuery.data || null,
     testContactLoading: testContactQuery.isLoading,

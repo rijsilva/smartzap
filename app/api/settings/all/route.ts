@@ -232,11 +232,11 @@ async function fetchMetaApp(): Promise<MetaAppData> {
   const { data } = await supabase.admin
     ?.from('settings')
     .select('key, value')
-    .in('key', ['meta_app_id', 'meta_app_secret']) || { data: null }
+    .in('key', ['metaAppId', 'metaAppSecret']) || { data: null }
 
   const settingsMap = new Map(data?.map(s => [s.key, s.value]) || [])
-  const dbAppId = settingsMap.get('meta_app_id') as string | undefined
-  const dbAppSecret = settingsMap.get('meta_app_secret') as string | undefined
+  const dbAppId = settingsMap.get('metaAppId') as string | undefined
+  const dbAppSecret = settingsMap.get('metaAppSecret') as string | undefined
 
   const envAppId = process.env.META_APP_ID
   const envAppSecret = process.env.META_APP_SECRET

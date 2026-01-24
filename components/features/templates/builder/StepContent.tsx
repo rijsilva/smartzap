@@ -121,6 +121,8 @@ export interface StepContentProps {
   namedVarError: string | null
   setNamedVarError: React.Dispatch<React.SetStateAction<string | null>>
   confirmNamedVariable: () => void
+  // Meta App ID (necessário para upload de mídia)
+  hasMetaAppId?: boolean
 }
 
 export function StepContent({
@@ -188,6 +190,7 @@ export function StepContent({
   namedVarError,
   setNamedVarError,
   confirmNamedVariable,
+  hasMetaAppId = true,
 }: StepContentProps) {
   return (
     <>
@@ -291,22 +294,27 @@ export function StepContent({
                   <SelectContent>
                     <SelectItem value="NONE">Nenhum</SelectItem>
                     <SelectItem value="TEXT" disabled={isLimitedTimeOffer}>Texto</SelectItem>
-                    <SelectItem value="IMAGE">Imagem</SelectItem>
-                    <SelectItem value="VIDEO">Video</SelectItem>
-                    <SelectItem value="GIF" disabled={!isMarketingCategory || isLimitedTimeOffer}>GIF (mp4)</SelectItem>
-                    <SelectItem value="DOCUMENT" disabled={isLimitedTimeOffer}>Documento</SelectItem>
-                    <SelectItem value="LOCATION" disabled={isLimitedTimeOffer}>Localizacao</SelectItem>
+                    <SelectItem value="IMAGE" disabled={!hasMetaAppId}>Imagem {!hasMetaAppId && '🔒'}</SelectItem>
+                    <SelectItem value="VIDEO" disabled={!hasMetaAppId}>Vídeo {!hasMetaAppId && '🔒'}</SelectItem>
+                    <SelectItem value="GIF" disabled={!hasMetaAppId || !isMarketingCategory || isLimitedTimeOffer}>GIF (mp4) {!hasMetaAppId && '🔒'}</SelectItem>
+                    <SelectItem value="DOCUMENT" disabled={!hasMetaAppId || isLimitedTimeOffer}>Documento {!hasMetaAppId && '🔒'}</SelectItem>
+                    <SelectItem value="LOCATION" disabled={isLimitedTimeOffer}>Localização</SelectItem>
                   </SelectContent>
                 </Select>
 
-                {headerType === 'GIF' ? (
-                  <p className="text-xs text-[var(--ds-text-muted)]">
-                    Observacao: GIF no header e documentado como disponivel para Marketing Messages (GIF = mp4, max 3.5MB).
+                {!hasMetaAppId ? (
+                  <p className="text-xs text-amber-400/80">
+                    🔒 Opções de mídia requerem o <span className="font-medium">ID do Aplicativo</span>. Configure em Configurações → API.
                   </p>
                 ) : null}
-                {!isMarketingCategory ? (
+                {headerType === 'GIF' ? (
                   <p className="text-xs text-[var(--ds-text-muted)]">
-                    Dica: a opcao GIF fica disponivel apenas em templates MARKETING.
+                    Observação: GIF no header é documentado como disponível para Marketing Messages (GIF = mp4, max 3.5MB).
+                  </p>
+                ) : null}
+                {!isMarketingCategory && hasMetaAppId ? (
+                  <p className="text-xs text-[var(--ds-text-muted)]">
+                    Dica: a opção GIF fica disponível apenas em templates MARKETING.
                   </p>
                 ) : null}
               </div>

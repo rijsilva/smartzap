@@ -99,6 +99,18 @@ export function ManualTemplateBuilder({
     staleTime: 10_000,
   })
 
+  // Verifica se Meta App ID está configurado (necessário para upload de mídia)
+  const metaAppQuery = useQuery({
+    queryKey: ['metaAppConfig'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/meta-app')
+      if (!res.ok) return { appId: null }
+      return res.json()
+    },
+    staleTime: 60_000,
+  })
+  const hasMetaAppId = !!metaAppQuery.data?.appId
+
   const publishedFlows = React.useMemo(() => {
     const rows = flowsQuery.data || []
     const withMeta = rows.filter((f) => !!f?.meta_flow_id)
@@ -668,6 +680,7 @@ export function ManualTemplateBuilder({
             namedVarError={namedVarError}
             setNamedVarError={setNamedVarError}
             confirmNamedVariable={confirmNamedVariable}
+            hasMetaAppId={hasMetaAppId}
           />
         )}
 

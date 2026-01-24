@@ -13,7 +13,7 @@
 - [Como Usar](#-como-usar)
 - [Configurações](#%EF%B8%8F-configurações)
 - [Problemas Comuns](#-problemas-comuns)
-- [Recuperação de Senha](#recuperação-de-senha)
+- [FAQ](#faq)
 - [Suporte](#-suporte)
 
 ---
@@ -348,34 +348,7 @@ O SmartZap usa dois serviços do Upstash:
 **Solução:**
 - Verifique se completou a instalação via wizard
 - Confirme a senha que você configurou
-
-### Recuperação de Senha
-
-Esqueceu sua senha? Siga estes passos para criar uma nova:
-
-1. **Acesse a Vercel**
-   - Vá em [vercel.com](https://vercel.com) e faça login
-
-2. **Abra seu projeto**
-   - Clique no projeto SmartZap
-
-3. **Edite a variável de ambiente**
-   - Vá em **Settings** → **Environment Variables**
-   - Encontre `MASTER_PASSWORD`
-   - Clique nos 3 pontos → **Edit**
-   - Digite sua nova senha (ex: `minhaNovaSenha123`)
-   - Clique em **Save**
-
-4. **Faça redeploy**
-   - Vá em **Deployments**
-   - No deploy mais recente, clique nos **3 pontos**
-   - Clique em **Redeploy** → **Redeploy**
-
-5. **Pronto!**
-   - Aguarde ~1 minuto
-   - Faça login com a nova senha
-
-> **Dica**: A senha pode ser qualquer texto simples (ex: `MinhaEmpresa2024`). Não precisa gerar hash nem nada complicado.
+- Veja a seção [FAQ → Como resetar minha senha?](#como-resetar-minha-senha)
 
 ### Mensagens não estão sendo enviadas
 
@@ -435,6 +408,25 @@ Esqueceu sua senha? Siga estes passos para criar uma nova:
 1. Instale o app como PWA (adicionar à tela inicial)
 2. Aceite as permissões de notificação
 3. Em iOS, precisa adicionar à tela inicial primeiro
+
+---
+
+## FAQ
+
+### Como resetar minha senha?
+
+1. Acesse vercel.com e faça login
+2. Clique no seu projeto SmartZap
+3. Clique em **Settings** (menu da esquerda)
+4. Clique em **Environment Variables**
+5. Ache `MASTER_PASSWORD` na lista
+6. Clique nos 3 pontinhos do lado direito → **Edit**
+7. Apague tudo e digite sua nova senha (ex: `MinhaSenha123`)
+8. Clique em **Save**
+9. Clique em **Deployments** (menu da esquerda)
+10. No primeiro da lista, clique nos 3 pontinhos → **Redeploy** → **Redeploy**
+11. Espera 1 minuto
+12. Pronto! Entra com a nova senha.
 
 ---
 

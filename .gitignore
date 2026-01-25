@@ -113,3 +113,4 @@ PRD-campaigns-new.md
 
 # Docs (dev-only, kept locally) - /docs/ ignora apenas na raiz
 /docs/
+.env*.local

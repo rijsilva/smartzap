@@ -98,12 +98,24 @@ export function CentralizedRealtimeProvider({
   }, [])
 
   // Debounced query invalidation helper
-  const debouncedInvalidate = useMemo(
-    () => debounce((queryKey: string[]) => {
-      queryClient.invalidateQueries({ queryKey })
+  // Acumula todas as query keys chamadas dentro da janela de debounce
+  // e invalida todas de uma vez. Resolve o bug onde chamadas sequenciais
+  // (ex: ['campaigns'] seguido de ['campaignStats']) cancelavam as anteriores.
+  const pendingKeysRef = useRef<Set<string>>(new Set())
+  const debouncedFlush = useMemo(
+    () => debounce(() => {
+      const keys = Array.from(pendingKeysRef.current)
+      pendingKeysRef.current.clear()
+      for (const key of keys) {
+        queryClient.invalidateQueries({ queryKey: [key] })
+      }
     }, debounceMs),
     [queryClient, debounceMs]
   )
+  const debouncedInvalidate = useCallback((queryKey: string[]) => {
+    pendingKeysRef.current.add(queryKey[0])
+    debouncedFlush()
+  }, [debouncedFlush])
 
   // Setup realtime channel
   useEffect(() => {

@@ -62,9 +62,10 @@ export const DEFAULT_AI_FALLBACK: AiFallbackConfig = {
 /**
  * Default: Gateway desabilitado (opt-in).
  * Quando habilitado, usa BYOK automaticamente com as chaves já configuradas.
+ * NOTA: Desabilitado por default devido ao bug #11280 (BYOK não funciona com créditos zerados).
  */
 export const DEFAULT_AI_GATEWAY: AiGatewayConfig = {
-  enabled: true,
+  enabled: false,
   apiKey: '',
   useBYOK: true,
   fallbackModels: ['anthropic/claude-sonnet-4-5', 'openai/gpt-5-mini'],

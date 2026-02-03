@@ -347,10 +347,14 @@ export async function processChatAgent(
 
   let baseModel
   let apiKey: string
+  let usingGateway = false
+  let allApiKeys: Partial<Record<'google' | 'openai' | 'anthropic', string>> | undefined
   try {
     const result = await createLanguageModel(modelId)
     baseModel = result.model
     apiKey = result.apiKey
+    usingGateway = result.usingGateway
+    allApiKeys = result.allApiKeys
   } catch (err) {
     return {
       success: false,
@@ -612,6 +616,37 @@ export async function processChatAgent(
       abortController.abort()
     }, AI_TIMEOUT_MS)
 
+    // Build providerOptions for AI Gateway (BYOK-only, no system credential fallback)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let providerOptions: Record<string, any> | undefined
+    if (usingGateway && allApiKeys) {
+      // Build BYOK config - only include providers that have keys configured
+      const byokConfig: Record<string, Array<{ apiKey: string }>> = {}
+      const availableProviders: string[] = []
+
+      for (const [prov, key] of Object.entries(allApiKeys)) {
+        if (key) {
+          byokConfig[prov] = [{ apiKey: key }]
+          availableProviders.push(prov)
+        }
+      }
+
+      if (availableProviders.length > 0) {
+        providerOptions = {
+          gateway: {
+            // 'only' restricts to BYOK providers - NO system credential fallback
+            only: availableProviders,
+            // 'order' defines fallback sequence: Google → OpenAI → Anthropic
+            order: ['google', 'openai', 'anthropic'].filter(p => availableProviders.includes(p)),
+            // 'byok' passes all configured API keys
+            byok: byokConfig,
+          },
+        }
+        console.log(`[chat-agent] 🔑 AI Gateway BYOK enabled for: ${availableProviders.join(', ')}`)
+        console.log(`[chat-agent] 🔄 Fallback order: ${providerOptions.gateway.order.join(' → ')}`)
+      }
+    }
+
     try {
       const result = await generateText({
         model,
@@ -624,6 +659,8 @@ export async function processChatAgent(
         temperature: agent.temperature ?? DEFAULT_TEMPERATURE,
         maxOutputTokens: agent.max_tokens ?? DEFAULT_MAX_TOKENS,
         abortSignal: abortController.signal,
+        // Pass providerOptions only when using AI Gateway
+        ...(providerOptions && { providerOptions }),
       })
 
       clearTimeout(timeoutId) // Limpa timeout se completou

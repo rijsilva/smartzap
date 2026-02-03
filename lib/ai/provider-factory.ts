@@ -98,29 +98,17 @@ async function createGatewayModel(
 
   const gatewayModelId = toGatewayModelId(provider, modelId)
 
-  // Headers para o Gateway
+  // Headers para o Gateway - apenas OIDC
+  // NOTA: BYOK agora é configurado via providerOptions.gateway.byok no generateText,
+  // não mais via headers. Isso permite usar 'only' para forçar BYOK-only (sem fallback para system credentials).
   const headers: Record<string, string> = {
     // Token OIDC para autenticação no Gateway
     Authorization: `Bearer ${oidcToken}`,
   }
 
-  // BYOK: passa TODAS as chaves disponíveis para habilitar fallbacks
   if (gatewayConfig.useBYOK) {
-    const byokHeaderMap: Record<AIProvider, string> = {
-      google: 'x-google-api-key',
-      openai: 'x-openai-api-key',
-      anthropic: 'x-anthropic-api-key',
-    }
-
-    // Passa todas as chaves que temos configuradas
-    for (const [prov, key] of Object.entries(allApiKeys)) {
-      if (key) {
-        headers[byokHeaderMap[prov as AIProvider]] = key
-      }
-    }
-
     const configuredProviders = Object.keys(allApiKeys).filter(p => allApiKeys[p as AIProvider])
-    console.log(`[provider-factory] BYOK enabled for providers: ${configuredProviders.join(', ')}`)
+    console.log(`[provider-factory] BYOK will be configured via providerOptions.gateway for: ${configuredProviders.join(', ')}`)
   }
 
   const openai = createOpenAI({
@@ -258,10 +246,21 @@ export async function getAllProviderApiKeys(): Promise<Partial<Record<AIProvider
  * 2. Helicone (se habilitado) - observability
  * 3. Conexão direta - sem proxy
  */
+export interface CreateLanguageModelResult {
+  model: LanguageModel
+  provider: AIProvider
+  apiKey: string
+  gatewayConfig?: AiGatewayConfig
+  /** Todas as API keys configuradas (para BYOK no providerOptions.gateway) */
+  allApiKeys?: Partial<Record<AIProvider, string>>
+  /** Se está usando o AI Gateway (para decidir se passa providerOptions) */
+  usingGateway: boolean
+}
+
 export async function createLanguageModel(
   modelId: string,
   apiKeyOverride?: string
-): Promise<{ model: LanguageModel; provider: AIProvider; apiKey: string; gatewayConfig?: AiGatewayConfig }> {
+): Promise<CreateLanguageModelResult> {
   const provider = getProviderFromModel(modelId)
 
   // Verifica se AI Gateway está habilitado
@@ -293,7 +292,7 @@ export async function createLanguageModel(
 
     // Usa AI Gateway para routing inteligente com fallbacks
     const model = await createGatewayModel(gatewayConfig, provider, modelId, allApiKeys)
-    return { model, provider, apiKey: primaryApiKey, gatewayConfig }
+    return { model, provider, apiKey: primaryApiKey, gatewayConfig, allApiKeys, usingGateway: true }
   }
 
   // Conexão direta: busca apenas a chave do provider primário
@@ -375,7 +374,7 @@ export async function createLanguageModel(
       throw new Error(`Provider não suportado: ${provider}`)
   }
 
-  return { model, provider, apiKey }
+  return { model, provider, apiKey, usingGateway: false }
 }
 
 /**

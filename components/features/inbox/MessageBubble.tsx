@@ -142,14 +142,15 @@ function parseTemplateMessage(content: string): ParsedTemplateMessage | null {
       continue
     }
 
-    // Todo o resto é body
-    if (currentSection !== 'buttons' && line.trim() !== '') {
+    // Todo o resto é body (incluindo linhas vazias para preservar espaçamento)
+    if (currentSection !== 'buttons') {
       bodyLines.push(line)
     }
 
     i++
   }
 
+  // Junta as linhas preservando quebras de linha e remove espaços no início/fim
   result.body = bodyLines.join('\n').trim()
 
   return result

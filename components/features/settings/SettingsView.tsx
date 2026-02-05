@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { TestContactPanel } from './TestContactPanel';
 import { AutoSuppressionPanel } from './AutoSuppressionPanel';
 import { WorkflowExecutionPanel } from './WorkflowExecutionPanel';
-import { MetaAppPanel } from './MetaAppPanel';
 import { StatusCard } from './StatusCard';
 import { TurboConfigSection } from './TurboConfigSection';
 import { WebhookConfigSection } from './WebhookConfigSection';
@@ -142,15 +141,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           isEditing={isEditing}
           onToggleEdit={() => setIsEditing((v) => !v)}
         />
-
-        {/* Meta App (opcional) — debug_token e diagnóstico avançado */}
-        {isDevMode && settings.isConnected && (
-          <MetaAppPanel
-            metaApp={metaApp}
-            metaAppLoading={metaAppLoading}
-            refreshMetaApp={refreshMetaApp}
-          />
-        )}
 
         {/* Credentials Form - Only visible if disconnected OR editing */}
         {(!settings.isConnected || isEditing) && (
